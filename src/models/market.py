@@ -1,9 +1,3 @@
-"""
-Market state representation for the scheduling problem.
-
-Based on Section 2.3.3 of "Multiagent Systems" by Shoham & Leyton-Brown.
-"""
-
 from dataclasses import dataclass, field
 from typing import FrozenSet, Optional
 import copy
