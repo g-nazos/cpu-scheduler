@@ -25,7 +25,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 from src.models.market import Market
 from src.auction.ascending import AscendingAuction
 from src.auction.equilibrium import check_equilibrium, print_equilibrium_report
-from src.optimization.integer_program import IntegerProgramSolver
 from src.experiments.scenarios import (
     create_book_example_1,
     create_book_example_2,
@@ -39,7 +38,6 @@ from src.experiments.metrics import (
 from src.visualization.plots import (
     plot_price_evolution,
     plot_allocation_timeline,
-    plot_welfare_comparison,
     plot_epsilon_sensitivity,
     plot_convergence_trace,
 )
@@ -63,8 +61,6 @@ def run_book_example_1(epsilon: float = 0.25, show_trace: bool = True) -> None:
     - With ε=1.00: Does NOT reach equilibrium
     """
     print("\n" + "=" * 70)
-    print("BOOK EXAMPLE 1: 8-Slot Processor (Section 2.3.3)")
-    print("=" * 70)
     
     market = create_book_example_1()
     print(f"\nInitial Market Configuration:")
@@ -72,17 +68,6 @@ def run_book_example_1(epsilon: float = 0.25, show_trace: bool = True) -> None:
     print(f"  Agents:")
     for agent in market.agents:
         print(f"    {agent.name}: λ={agent.required_slots}, d=slot_{agent.deadline_slot_id}, w=${agent.worth:.2f}")
-    
-    # Compute optimal solution
-    print("\nComputing optimal solution via Integer Programming...")
-    solver = IntegerProgramSolver(market)
-    optimal = solver.solve()
-    print(f"  Optimal Welfare: ${optimal.optimal_welfare:.2f}")
-    print(f"  Optimal Allocation:")
-    for agent in market.agents:
-        slots = optimal.allocations.get(agent.agent_id, frozenset())
-        slot_ids = sorted([s.slot_id for s in slots])
-        print(f"    {agent.name}: slots {slot_ids}")
     
     # Run auction
     print(f"\nRunning Ascending Auction with ε=${epsilon:.2f}...")
@@ -97,7 +82,7 @@ def run_book_example_1(epsilon: float = 0.25, show_trace: bool = True) -> None:
     print_equilibrium_report(eq_result, result.market)
     
     # Compute and print metrics
-    metrics = compute_metrics(result, epsilon, optimal)
+    metrics = compute_metrics(result, epsilon)
     print_metrics_report(metrics)
     
     return result, metrics
@@ -111,8 +96,6 @@ def run_book_example_2() -> None:
     due to complementarity in valuations.
     """
     print("\n" + "=" * 70)
-    print("BOOK EXAMPLE 2: No Equilibrium Case (Table 2.1)")
-    print("=" * 70)
     
     market = create_book_example_2()
     print(f"\nMarket Configuration:")
@@ -120,20 +103,6 @@ def run_book_example_2() -> None:
     print(f"  Agents:")
     for agent in market.agents:
         print(f"    {agent.name}: λ={agent.required_slots}, d=slot_{agent.deadline_slot_id}, w=${agent.worth:.2f}")
-    
-    print("\n--- Explanation from the book ---")
-    print("No competitive equilibrium exists because:")
-    print("  - If Job1 gets both slots, combined price ≤ $10, so one slot ≤ $5")
-    print("  - But Job2 is willing to pay $6 for that slot → not equilibrium")
-    print("  - If Job2 gets a slot, combined price ≤ $6")
-    print("  - But Job1 would pay more for both slots → not equilibrium")
-    print("  - If no allocation, prices = $6 (reserve), both would bid → not equilibrium")
-    print("-" * 50)
-    
-    # Compute optimal
-    solver = IntegerProgramSolver(market)
-    optimal = solver.solve()
-    print(f"\nOptimal Welfare: ${optimal.optimal_welfare:.2f}")
     
     # Run auction with different epsilons
     for eps in [0.25, 0.5, 1.0]:
@@ -143,7 +112,7 @@ def run_book_example_2() -> None:
         
         eq_result = check_equilibrium(result.market)
         print(f"  Iterations: {result.iterations}")
-        print(f"  Welfare: ${result.final_welfare:.2f}")
+        print(f"  Solution: ${result.final_solution_value:.2f}")
         print(f"  Is Equilibrium: {eq_result.is_equilibrium}")
         
         if not eq_result.is_equilibrium and eq_result.violations:
@@ -158,8 +127,6 @@ def run_book_example_3() -> None:
     allocations arbitrarily far from optimal.
     """
     print("\n" + "=" * 70)
-    print("BOOK EXAMPLE 3: Arbitrarily Suboptimal Case")
-    print("=" * 70)
     
     market = create_book_example_3()
     print(f"\nMarket Configuration:")
@@ -169,36 +136,20 @@ def run_book_example_3() -> None:
     for agent in market.agents:
         print(f"    {agent.name}: λ={agent.required_slots}, d=slot_{agent.deadline_slot_id}, w=${agent.worth:.2f}")
     
-    # Compute optimal
-    solver = IntegerProgramSolver(market)
-    optimal = solver.solve()
-    print(f"\nOptimal Welfare: ${optimal.optimal_welfare:.2f}")
-    print(f"Optimal Allocation:")
-    for agent in market.agents:
-        slots = optimal.allocations.get(agent.agent_id, frozenset())
-        slot_ids = sorted([s.slot_id for s in slots])
-        if slot_ids:
-            print(f"  {agent.name}: slots {slot_ids}")
-    
     # Run auction
     print(f"\nRunning Ascending Auction with ε=$0.25...")
     auction = AscendingAuction(epsilon=0.25)
     result = auction.run(market)
     
     print(f"\nAuction Result:")
-    print(f"  Welfare: ${result.final_welfare:.2f}")
+    print(f"  Solution: ${result.final_solution_value:.2f}")
     print(f"  Allocation:")
     for agent in market.agents:
         slots = result.market.allocations.get(agent.agent_id, frozenset())
         slot_ids = sorted([s.slot_id for s in slots])
         if slot_ids:
             print(f"    {agent.name}: slots {slot_ids}")
-    
-    gap = optimal.optimal_welfare - result.final_welfare
-    ratio = result.final_welfare / optimal.optimal_welfare * 100
-    print(f"\n  Welfare Gap: ${gap:.2f}")
-    print(f"  Welfare Ratio: {ratio:.1f}%")
-    print("\n  Note: By adjusting values, this gap can be made arbitrarily large!")
+    print("\n  Note: By adjusting values, auction outcome can be made arbitrarily far from optimal.")
 
 
 def run_epsilon_sensitivity_analysis(show_plots: bool = True) -> None:
@@ -218,14 +169,13 @@ def run_epsilon_sensitivity_analysis(show_plots: bool = True) -> None:
     sensitivity = run_epsilon_sensitivity(market, epsilons)
     
     print("\nResults:")
-    print("-" * 70)
-    print(f"{'Epsilon':<10} {'Iterations':<12} {'Welfare Gap':<15} {'Ratio':<10} {'Equilibrium'}")
-    print("-" * 70)
+    print("-" * 50)
+    print(f"{'Epsilon':<10} {'Iterations':<12} {'Equilibrium'}")
+    print("-" * 50)
     for i, eps in enumerate(sensitivity.epsilons):
         eq_str = "YES" if sensitivity.equilibrium_achieved[i] else "NO"
-        print(f"{eps:<10.2f} {sensitivity.iterations[i]:<12} "
-              f"${sensitivity.welfare_gaps[i]:<14.2f} {sensitivity.welfare_ratios[i]*100:<9.1f}% {eq_str}")
-    print("-" * 70)
+        print(f"{eps:<10.2f} {sensitivity.iterations[i]:<12} {eq_str}")
+    print("-" * 50)
     
     if show_plots:
         fig = plot_epsilon_sensitivity(sensitivity, 

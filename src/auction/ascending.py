@@ -1,10 +1,3 @@
-"""
-Ascending Auction Algorithm for the Scheduling Problem.
-
-Implementation of Figure 2.7 from Section 2.3.3 of "Multiagent Systems"
-by Shoham & Leyton-Brown.
-"""
-
 import logging
 from dataclasses import dataclass, field
 from typing import FrozenSet, Optional
@@ -34,7 +27,7 @@ class AuctionResult:
     rounds: list[AuctionRound]
     converged: bool
     iterations: int
-    final_welfare: float
+    final_solution_value: float
     
     def print_trace(self, max_rounds: Optional[int] = None) -> None:
         """Print a trace of the auction similar to the book's tables."""
@@ -56,7 +49,7 @@ class AuctionResult:
         
         print("-" * 80)
         print(f"Converged: {self.converged}, Iterations: {self.iterations}, "
-              f"Final Welfare: {self.final_welfare:.2f}")
+              f"Final solution_value: {self.final_solution_value:.2f}")
 
 
 class AscendingAuction:
@@ -74,7 +67,7 @@ class AscendingAuction:
     3. Return final allocations and prices
     """
     
-    def __init__(self, epsilon: float = 0.25, max_iterations: int = 10000):
+    def __init__(self, epsilon=0.25, max_iterations=10000):
         """
         Initialize the auction.
         
@@ -118,7 +111,7 @@ class AscendingAuction:
                 
                 # Find best bundle at current ask prices
                 current_allocation = market.get_allocation(agent)
-                best_bundle, best_surplus = agent.find_best_bundle(
+                best_bundle, _ = agent.find_best_bundle(
                     market.slots, ask_prices, current_allocation
                 )
                 
@@ -172,12 +165,12 @@ class AscendingAuction:
                 break
         
         converged = iteration < self.max_iterations
-        final_welfare = market.compute_welfare()
+        final_solution_value = market.compute_solution_value()
         
         return AuctionResult(
             market=market,
             rounds=rounds,
             converged=converged,
             iterations=iteration,
-            final_welfare=final_welfare
+            final_solution_value=final_solution_value
         )

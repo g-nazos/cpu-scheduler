@@ -1,5 +1,3 @@
-"""Optimization solvers for baseline comparison."""
+"""Optimization utilities (reserved for future use)."""
 
-from src.optimization.integer_program import IntegerProgramSolver
-
-__all__ = ["IntegerProgramSolver"]
+__all__: list[str] = []

@@ -99,14 +99,14 @@ class Market:
         
         return ask_prices
     
-    def compute_welfare(self) -> float:
+    def compute_solution_value(self) -> float:
         """
-        Compute the total welfare V(F) of the current allocation.
+        Compute the total solution value V(F) of the current allocation.
         
         V(F) = Σ_{j|x_j ∈ F_∅} q_j + Σ_{i∈N} v_i(F_i)
         
         Returns:
-            Total welfare value
+            Total solution value
         """
         # Value from unallocated slots (reserve prices)
         unallocated = self.get_unallocated_slots()
@@ -142,7 +142,7 @@ class Market:
                 for agent in self.agents
             },
             "bid_prices": [self.bid_prices.get(s.slot_id, s.reserve_price) for s in self.slots],
-            "welfare": self.compute_welfare()
+            "solution_value": self.compute_solution_value()
         }
     
     def __repr__(self) -> str:
@@ -154,5 +154,5 @@ class Market:
             slot_ids = sorted([s.slot_id for s in slots])
             lines.append(f"    {agent.name}: {slot_ids}")
         lines.append(f"  Bid Prices: {[self.bid_prices.get(s.slot_id, 0) for s in self.slots]}")
-        lines.append(f"  Welfare: {self.compute_welfare():.2f}")
+        lines.append(f"  Solution Value: {self.compute_solution_value():.2f}")
         return "\n".join(lines)

@@ -79,13 +79,13 @@ class TestAscendingAuction:
         # The book shows ~24 rounds, but exact number depends on implementation
         assert result.iterations < 50  # Should converge reasonably quickly
     
-    def test_welfare_non_negative(self):
-        """Verify welfare is always non-negative."""
+    def test_solution_value_non_negative(self):
+        """Verify solution_value is always non-negative."""
         market = create_book_example_1()
         auction = AscendingAuction(epsilon=0.25)
         result = auction.run(market)
         
-        assert result.final_welfare >= 0
+        assert result.final_solution_value >= 0
 
 
 class TestAuctionRoundTracking:

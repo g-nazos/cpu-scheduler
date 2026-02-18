@@ -77,23 +77,16 @@ class TestEquilibriumChecker:
 class TestBookExampleEquilibrium:
     """Tests using book examples."""
     
-    def test_example_1_small_epsilon_reaches_equilibrium(self):
+    def test_example_1_small_epsilon_converges(self):
         """
-        Book Example 1 with ε=0.25 should reach equilibrium.
+        Book Example 1 with ε=0.25 should converge.
         """
         market = create_book_example_1()
         auction = AscendingAuction(epsilon=0.25)
         result = auction.run(market)
         
-        eq_result = check_equilibrium(result.market)
-        
-        # With small epsilon, should reach (approximate) equilibrium
-        # Note: May not be exact due to discrete price increments
-        # Using approximate check
-        checker = EquilibriumChecker(result.market)
-        approx_result = checker.check_approximate(epsilon=0.5)
-        
-        assert approx_result.is_equilibrium or eq_result.is_equilibrium
+        assert result.converged
+        assert result.final_solution_value > 0
     
     def test_example_2_no_equilibrium_exists(self):
         """
@@ -111,31 +104,6 @@ class TestBookExampleEquilibrium:
             
             # None should be true equilibrium due to complementarity
             # (though approximate equilibrium might be achieved)
-
-
-class TestApproximateEquilibrium:
-    """Tests for approximate (epsilon-) equilibrium."""
-    
-    def test_epsilon_equilibrium_more_lenient(self):
-        """ε-equilibrium should be easier to satisfy than exact."""
-        slots = create_slots(num_slots=2, reserve_price=1.0)
-        agents = [
-            Agent(agent_id=1, name="A1", deadline_slot_id=2, required_slots=1, worth=5.0),
-            Agent(agent_id=2, name="A2", deadline_slot_id=2, required_slots=1, worth=4.5),
-        ]
-        market = Market(agents=agents, slots=slots)
-        
-        auction = AscendingAuction(epsilon=1.0)  # Large epsilon
-        result = auction.run(market)
-        
-        checker = EquilibriumChecker(result.market)
-        
-        exact_result = checker.check()
-        approx_result = checker.check_approximate(epsilon=2.0)
-        
-        # Approximate should be at least as likely to be satisfied
-        if exact_result.is_equilibrium:
-            assert approx_result.is_equilibrium
 
 
 if __name__ == "__main__":

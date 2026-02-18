@@ -1,16 +1,6 @@
-"""
-Competitive Equilibrium Verification.
-
-Implementation of Definition 2.3.11 from Section 2.3.3 of "Multiagent Systems"
-by Shoham & Leyton-Brown.
-"""
-
 import logging
 from dataclasses import dataclass
-from typing import FrozenSet, Optional
 
-from src.models.agent import Agent
-from src.models.slot import Slot
 from src.models.market import Market
 
 
@@ -110,77 +100,6 @@ class EquilibriumChecker:
                 violations.append(
                     f"Allocated slot {slot.slot_id}: price {price:.2f} < "
                     f"reserve {slot.reserve_price:.2f}"
-                )
-        
-        is_equilibrium = surplus_ok and unallocated_ok and allocated_ok
-        
-        return EquilibriumCheckResult(
-            is_equilibrium=is_equilibrium,
-            surplus_maximization_satisfied=surplus_ok,
-            unallocated_price_satisfied=unallocated_ok,
-            allocated_price_satisfied=allocated_ok,
-            violations=violations,
-            agent_surpluses=agent_surpluses,
-            best_surpluses=best_surpluses
-        )
-    
-    def check_approximate(self, epsilon: float) -> EquilibriumCheckResult:
-        """
-        Check if the market is in an approximate (ε-) equilibrium.
-        
-        In an ε-equilibrium, no agent can improve surplus by more than ε
-        by switching to a different bundle.
-        
-        Args:
-            epsilon: Maximum allowed surplus improvement
-            
-        Returns:
-            EquilibriumCheckResult
-        """
-        violations = []
-        agent_surpluses = {}
-        best_surpluses = {}
-        
-        # Check approximate surplus maximization
-        surplus_ok = True
-        for agent in self.market.agents:
-            current_allocation = self.market.get_allocation(agent)
-            current_surplus = agent.surplus(current_allocation, self.market.bid_prices)
-            agent_surpluses[agent.agent_id] = current_surplus
-            
-            best_bundle, best_surplus = agent.find_best_bundle(
-                self.market.slots,
-                self.market.bid_prices,
-                frozenset()
-            )
-            best_surpluses[agent.agent_id] = best_surplus
-            
-            # Allow up to epsilon improvement
-            if best_surplus > current_surplus + epsilon + self.tolerance:
-                surplus_ok = False
-                violations.append(
-                    f"Agent {agent.name}: surplus gap {best_surplus - current_surplus:.2f} > ε={epsilon}"
-                )
-        
-        # Price conditions remain the same
-        unallocated_ok = True
-        unallocated_slots = self.market.get_unallocated_slots()
-        for slot in unallocated_slots:
-            price = self.market.bid_prices.get(slot.slot_id, slot.reserve_price)
-            if abs(price - slot.reserve_price) > self.tolerance:
-                unallocated_ok = False
-                violations.append(
-                    f"Unallocated slot {slot.slot_id}: price {price:.2f} != reserve {slot.reserve_price:.2f}"
-                )
-        
-        allocated_ok = True
-        allocated_slots = set(self.market.slots) - set(unallocated_slots)
-        for slot in allocated_slots:
-            price = self.market.bid_prices.get(slot.slot_id, slot.reserve_price)
-            if price < slot.reserve_price - self.tolerance:
-                allocated_ok = False
-                violations.append(
-                    f"Allocated slot {slot.slot_id}: price {price:.2f} < reserve {slot.reserve_price:.2f}"
                 )
         
         is_equilibrium = surplus_ok and unallocated_ok and allocated_ok

@@ -2,7 +2,7 @@
 Visualization utilities for auction results.
 
 Creates plots for price evolution, allocation timelines,
-welfare comparison, and convergence analysis.
+solution value comparison, and convergence analysis.
 """
 
 from typing import Optional
@@ -127,54 +127,38 @@ def plot_allocation_timeline(
     return fig
 
 
-def plot_welfare_comparison(
-    auction_welfare: float,
-    optimal_welfare: float,
-    reserve_welfare: float,
-    title: str = "Welfare Comparison",
+def plot_solution_value_comparison(
+    auction_solution_value: float,
+    reserve_solution_value: float,
+    title: str = "Solution Value Comparison",
     save_path: Optional[str] = None
 ) -> plt.Figure:
     """
-    Plot bar chart comparing auction welfare to optimal.
-    
+    Plot bar chart comparing auction solution value to reserve-only.
+
     Args:
-        auction_welfare: Welfare from auction
-        optimal_welfare: Optimal welfare from IP
-        reserve_welfare: Welfare if all slots unallocated
+        auction_solution_value: Solution value from auction
+        reserve_solution_value: Solution value if all slots unallocated
         title: Plot title
         save_path: Path to save figure
-        
+
     Returns:
         matplotlib Figure
     """
     fig, ax = plt.subplots(figsize=(8, 6))
-    
-    labels = ["Reserve Only", "Auction", "Optimal"]
-    values = [reserve_welfare, auction_welfare, optimal_welfare]
-    colors = ["#ff9999", "#66b3ff", "#99ff99"]
-    
+    labels = ["Reserve Only", "Auction"]
+    values = [reserve_solution_value, auction_solution_value]
+    colors = ["#ff9999", "#66b3ff"]
     bars = ax.bar(labels, values, color=colors, edgecolor="black", linewidth=1.5)
-    
-    # Add value labels
     for bar, value in zip(bars, values):
         ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
                 f"${value:.2f}", ha="center", va="bottom", fontsize=12)
-    
-    ax.set_ylabel("Welfare ($)", fontsize=12)
+    ax.set_ylabel("Solution Value ($)", fontsize=12)
     ax.set_title(title, fontsize=14)
     ax.set_ylim(0, max(values) * 1.15)
-    
-    # Add optimality ratio
-    ratio = auction_welfare / optimal_welfare if optimal_welfare > 0 else 0
-    ax.text(0.95, 0.95, f"Auction/Optimal: {ratio:.1%}",
-            transform=ax.transAxes, ha="right", va="top",
-            fontsize=11, bbox=dict(boxstyle="round", facecolor="wheat"))
-    
     plt.tight_layout()
-    
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
-    
     return fig
 
 
@@ -185,64 +169,44 @@ def plot_epsilon_sensitivity(
 ) -> plt.Figure:
     """
     Plot results of epsilon sensitivity analysis.
-    
+
     Args:
         sensitivity: Results from epsilon sensitivity analysis
         title: Plot title
         save_path: Path to save figure
-        
+
     Returns:
         matplotlib Figure
     """
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    
-    # Plot 1: Iterations vs Epsilon
-    ax1 = axes[0, 0]
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    ax1 = axes[0]
     ax1.plot(sensitivity.epsilons, sensitivity.iterations, "bo-", linewidth=2, markersize=8)
     ax1.set_xlabel("Epsilon (ε)", fontsize=11)
     ax1.set_ylabel("Iterations", fontsize=11)
     ax1.set_title("Iterations vs Epsilon", fontsize=12)
     ax1.grid(True, alpha=0.3)
-    
-    # Plot 2: Welfare Gap vs Epsilon
-    ax2 = axes[0, 1]
-    ax2.plot(sensitivity.epsilons, sensitivity.welfare_gaps, "ro-", linewidth=2, markersize=8)
-    ax2.set_xlabel("Epsilon (ε)", fontsize=11)
-    ax2.set_ylabel("Welfare Gap ($)", fontsize=11)
-    ax2.set_title("Welfare Gap vs Epsilon", fontsize=12)
-    ax2.grid(True, alpha=0.3)
-    
-    # Plot 3: Welfare Ratio vs Epsilon
-    ax3 = axes[1, 0]
-    ax3.plot(sensitivity.epsilons, [r * 100 for r in sensitivity.welfare_ratios], 
-             "go-", linewidth=2, markersize=8)
-    ax3.set_xlabel("Epsilon (ε)", fontsize=11)
-    ax3.set_ylabel("Welfare Ratio (%)", fontsize=11)
-    ax3.set_title("Welfare Ratio vs Epsilon", fontsize=12)
-    ax3.set_ylim(0, 105)
-    ax3.grid(True, alpha=0.3)
-    
-    # Plot 4: Equilibrium Achievement
-    ax4 = axes[1, 1]
+
+    ax2 = axes[1]
     colors = ["green" if eq else "red" for eq in sensitivity.equilibrium_achieved]
-    ax4.bar(range(len(sensitivity.epsilons)), 
+    ax2.bar(range(len(sensitivity.epsilons)),
             [1 if eq else 0 for eq in sensitivity.equilibrium_achieved],
             color=colors, edgecolor="black")
-    ax4.set_xticks(range(len(sensitivity.epsilons)))
-    ax4.set_xticklabels([f"{e:.2f}" for e in sensitivity.epsilons], rotation=45)
-    ax4.set_xlabel("Epsilon (ε)", fontsize=11)
-    ax4.set_ylabel("Equilibrium Achieved", fontsize=11)
-    ax4.set_title("Equilibrium Achievement", fontsize=12)
-    ax4.set_ylim(0, 1.2)
-    ax4.set_yticks([0, 1])
-    ax4.set_yticklabels(["No", "Yes"])
-    
+    ax2.set_xticks(range(len(sensitivity.epsilons)))
+    ax2.set_xticklabels([f"{e:.2f}" for e in sensitivity.epsilons], rotation=45)
+    ax2.set_xlabel("Epsilon (ε)", fontsize=11)
+    ax2.set_ylabel("Equilibrium Achieved", fontsize=11)
+    ax2.set_title("Equilibrium Achievement", fontsize=12)
+    ax2.set_ylim(0, 1.2)
+    ax2.set_yticks([0, 1])
+    ax2.set_yticklabels(["No", "Yes"])
+
     fig.suptitle(title, fontsize=14, y=1.02)
     plt.tight_layout()
-    
+
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
-    
+
     return fig
 
 
