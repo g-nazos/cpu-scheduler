@@ -69,7 +69,7 @@ class TestAscendingAuction:
         """
         Test Book Example 1 with ε=0.25.
         
-        According to the book, this should converge to equilibrium.
+        According to the book, this should converge.
         """
         market = create_book_example_1()
         auction = AscendingAuction(epsilon=0.25)

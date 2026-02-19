@@ -8,7 +8,7 @@ of "Multiagent Systems" by Shoham & Leyton-Brown.
 Usage:
     python main.py                     # Run all book examples
     python main.py --example 1         # Run book example 1 (8-slot)
-    python main.py --example 2         # Run book example 2 (no equilibrium)
+    python main.py --example 2         # Run book example 2
     python main.py --example 3         # Run book example 3 (suboptimal)
     python main.py --example 4         # Run many-jobs example (8 jobs)
     python main.py --sensitivity       # Run epsilon sensitivity analysis
@@ -19,13 +19,13 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Optional
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.models.market import Market
 from src.auction.ascending import AscendingAuction, AuctionResult
-from src.auction.equilibrium import check_equilibrium, print_equilibrium_report
 from src.experiments.scenarios import (
     create_book_example_1,
     create_book_example_1_two_cpus,
@@ -39,12 +39,14 @@ from src.experiments.metrics import (
     compute_metrics,
     print_metrics_report,
     run_epsilon_sensitivity,
+    EpsilonSensitivityResult,
 )
 from src.visualization.plots import (
     plot_price_evolution,
     plot_allocation_timeline,
     plot_allocation_and_prices,
     plot_epsilon_sensitivity,
+    plot_epsilon_sensitivity_all,
     plot_convergence_trace,
 )
 
@@ -77,8 +79,8 @@ def run_book_example_1(epsilon: float = 0.25, show_trace: bool = True, two_cpus:
     Run the main 8-slot processor example from Section 2.3.3.
     
     Expected behavior:
-    - With ε=0.25: Converges to equilibrium in ~24 rounds
-    - With ε=1.00: Does NOT reach equilibrium
+    - With ε=0.25: Converges in ~24 rounds
+    - With ε=1.00: May take more rounds or not converge
     - With two_cpus=True: same jobs, 2 identical CPUs (16 slots).
     """
     print("\n" + "=" * 70)
@@ -98,9 +100,6 @@ def run_book_example_1(epsilon: float = 0.25, show_trace: bool = True, two_cpus:
     
     if show_trace:
         result.print_trace(max_rounds=100)
-    
-    eq_result = check_equilibrium(result.market)
-    print_equilibrium_report(eq_result, result.market)
     print("\nFinal market state:")
     print_final_market_state(result)
     # Compute and print metrics
@@ -125,8 +124,6 @@ def run_many_jobs_example(epsilon: float = 0.25, show_trace: bool = True, two_cp
     result = auction.run(market)
     if show_trace:
         result.print_trace(max_rounds=150)
-    eq_result = check_equilibrium(result.market)
-    print_equilibrium_report(eq_result, result.market)
     print("\nFinal market state:")
     print_final_market_state(result)
     metrics = compute_metrics(result, epsilon)
@@ -149,8 +146,6 @@ def run_duplicate_example_1(epsilon: float = 0.25, show_trace: bool = True, two_
     result = auction.run(market)
     if show_trace:
         result.print_trace(max_rounds=150)
-    eq_result = check_equilibrium(result.market)
-    print_equilibrium_report(eq_result, result.market)
     print("\nFinal market state:")
     print_final_market_state(result)
     metrics = compute_metrics(result, epsilon)
@@ -160,7 +155,7 @@ def run_duplicate_example_1(epsilon: float = 0.25, show_trace: bool = True, two_
 
 def run_book_example_2(two_cpus: bool = False) -> AuctionResult | None:
     """
-    Run the "no equilibrium" example from Table 2.1.
+    Run the Table 2.1 example (2 slots, 2 jobs).
     With two_cpus=True: 4 slots (2 times × 2 CPUs), same 2 jobs.
     """
     print("\n" + "=" * 70)
@@ -179,14 +174,9 @@ def run_book_example_2(two_cpus: bool = False) -> AuctionResult | None:
         auction = AscendingAuction(epsilon=eps, max_iterations=100)
         result = auction.run(market)
         last_result = result
-
-        eq_result = check_equilibrium(result.market)
         print(f"  Iterations: {result.iterations}")
         print(f"  Solution: ${result.final_solution_value:.2f}")
         print_final_market_state(result)
-        print(f"  Is Equilibrium: {eq_result.is_equilibrium}")
-        if not eq_result.is_equilibrium and eq_result.violations:
-            print(f"  Violations: {eq_result.violations[0]}")
     return last_result
 
 
@@ -219,35 +209,53 @@ def run_book_example_3() -> AuctionResult:
     return result
 
 
-def run_epsilon_sensitivity_analysis(show_plots: bool = True) -> None:
+# Experiments to include in sensitivity analysis: (label, market_factory)
+SENSITIVITY_EXPERIMENTS = [
+    ("Example 1", create_book_example_1),
+    ("Example 2", create_book_example_2),
+    ("Example 3", create_book_example_3),
+    ("Example 4 (many jobs)", create_many_jobs_example),
+    ("Example 5 (duplicate ex1)", lambda: create_duplicate_example_1(num_cpus=1)),
+]
+
+
+def run_epsilon_sensitivity_analysis(
+    show_plots: bool = True,
+    save_plots: bool = False,
+    output_dir: Optional[Path] = None,
+) -> None:
     """
-    Run epsilon sensitivity analysis on Book Example 1.
+    Run epsilon sensitivity analysis for all experiments (examples 1–5).
     """
     print("\n" + "=" * 70)
-    print("EPSILON SENSITIVITY ANALYSIS")
+    print("EPSILON SENSITIVITY ANALYSIS (ALL EXPERIMENTS)")
     print("=" * 70)
-    
-    market = create_book_example_1()
+
     epsilons = [0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0]
-    
-    print(f"\nTesting epsilon values: {epsilons}")
-    print("Running experiments...")
-    
-    sensitivity = run_epsilon_sensitivity(market, epsilons)
-    
-    print("\nResults:")
-    print("-" * 50)
-    print(f"{'Epsilon':<10} {'Iterations':<12} {'Equilibrium'}")
-    print("-" * 50)
-    for i, eps in enumerate(sensitivity.epsilons):
-        eq_str = "YES" if sensitivity.equilibrium_achieved[i] else "NO"
-        print(f"{eps:<10.2f} {sensitivity.iterations[i]:<12} {eq_str}")
-    print("-" * 50)
-    
-    if show_plots:
-        fig = plot_epsilon_sensitivity(sensitivity, 
-                                       title="Epsilon Sensitivity - Book Example 1")
-        plt.show()
+    print(f"\nEpsilon values: {epsilons}")
+    print("Running sensitivity for each experiment...\n")
+
+    results: list[tuple[str, EpsilonSensitivityResult]] = []
+    for name, market_fn in SENSITIVITY_EXPERIMENTS:
+        market = market_fn()
+        sensitivity = run_epsilon_sensitivity(market, epsilons)
+        results.append((name, sensitivity))
+
+        print(f"  {name}:")
+        print(f"    {'Eps':<8} {'Iters':<10}")
+        for i, eps in enumerate(sensitivity.epsilons):
+            print(f"    {eps:<8.2f} {sensitivity.iterations[i]:<10}")
+        print()
+
+    if show_plots or save_plots:
+        fig = plot_epsilon_sensitivity_all(results, save_path=None)
+        if fig:
+            if save_plots and output_dir:
+                path = output_dir / "epsilon_sensitivity_all.png"
+                fig.savefig(str(path), dpi=150, bbox_inches="tight")
+                print(f"Sensitivity plot saved to {path}")
+            if show_plots:
+                plt.show()
 
 
 def run_all_experiments(save_plots: bool = False) -> None:
@@ -266,7 +274,7 @@ def run_all_experiments(save_plots: bool = False) -> None:
                             save_path=str(output_dir / "ex1_prices_025.png"))
         plot_allocation_and_prices(result1, title="Allocation and Prices - Example 1 (ε=0.25)",
                                   save_path=str(output_dir / "ex1_allocation_025.png"))
-    # Example 1 with ε=1.0 (should NOT converge to equilibrium)
+    # Example 1 with ε=1.0
     print("\n" + "#" * 70)
     print("# Running Book Example 1 with ε=1.0")
     print("#" * 70)
@@ -276,9 +284,9 @@ def run_all_experiments(save_plots: bool = False) -> None:
                             save_path=str(output_dir / "ex1_prices_10.png"))
         plot_allocation_and_prices(result1b, title="Allocation and Prices - Example 1 (ε=1.0)",
                                   save_path=str(output_dir / "ex1_allocation_10.png"))
-    # Example 2 (no equilibrium)
+    # Example 2
     print("\n" + "#" * 70)
-    print("# Running Book Example 2 (No Equilibrium Case)")
+    print("# Running Book Example 2")
     print("#" * 70)
     result2 = run_book_example_2()
     if save_plots and result2 is not None:
@@ -293,17 +301,16 @@ def run_all_experiments(save_plots: bool = False) -> None:
         plot_allocation_and_prices(result3, title="Allocation and Prices - Example 3",
                                   save_path=str(output_dir / "ex3_allocation.png"))
     
-    # Epsilon sensitivity
+    # Epsilon sensitivity (all experiments)
     print("\n" + "#" * 70)
-    print("# Running Epsilon Sensitivity Analysis")
+    print("# Running Epsilon Sensitivity Analysis (All Experiments)")
     print("#" * 70)
-    run_epsilon_sensitivity_analysis(show_plots=not save_plots)
-    
+    run_epsilon_sensitivity_analysis(
+        show_plots=not save_plots,
+        save_plots=save_plots,
+        output_dir=output_dir if save_plots else None,
+    )
     if save_plots:
-        market = create_book_example_1()
-        sensitivity = run_epsilon_sensitivity(market, [0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0])
-        plot_epsilon_sensitivity(sensitivity, 
-                                save_path=str(output_dir / "epsilon_sensitivity.png"))
         print(f"\nPlots saved to {output_dir}/")
 
 
@@ -399,7 +406,14 @@ Examples:
             if not args.no_plots:
                 plt.show()
         elif args.sensitivity:
-            run_epsilon_sensitivity_analysis(show_plots=not args.no_plots)
+            out_dir = Path("output") if args.save else None
+            if args.save:
+                out_dir.mkdir(exist_ok=True)
+            run_epsilon_sensitivity_analysis(
+                show_plots=not args.no_plots,
+                save_plots=args.save,
+                output_dir=out_dir,
+            )
     except KeyboardInterrupt:
         print("\nInterrupted by user")
         sys.exit(1)

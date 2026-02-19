@@ -31,8 +31,8 @@ def create_book_example_1() -> Market:
         3:00 PM  -> Agent 4
         4:00 PM  -> Agent 4
     
-    With ε=0.25: converges to equilibrium
-    With ε=1.00: does NOT reach equilibrium
+    With ε=0.25: converges in ~24 rounds
+    With ε=1.00: may not converge or take many rounds
     """
     # Create 8 slots from 9am to 5pm with reserve price $3
     slots = create_slots(num_slots=8, reserve_price=3.0, start_hour=9)
@@ -112,15 +112,14 @@ def create_duplicate_example_1(num_cpus: int = 1) -> Market:
 
 def create_book_example_2() -> Market:
     """
-    Create the "no equilibrium" example from Table 2.1.
+    Create the Table 2.1 example (2 slots, 2 jobs).
     
     2 slots: 9am, 10am, reserve $3/hour
     2 jobs:
         Job 1: 2 hours, deadline 11:00 AM, worth $10.00
         Job 2: 1 hour, deadline 11:00 AM, worth $6.00
     
-    This example demonstrates that competitive equilibrium
-    may NOT exist due to complementarity.
+    The book notes that competitive equilibrium may not exist here due to complementarity.
     """
     slots = create_slots(num_slots=2, reserve_price=3.0, start_hour=9)
     
@@ -228,7 +227,7 @@ def create_single_slot_demand_scenario(
     """
     Create a scenario where each agent demands only 1 slot.
     
-    According to Theorem 2.3.14, this guarantees equilibrium exists.
+    According to Theorem 2.3.14, under these conditions a competitive equilibrium exists.
     
     Args:
         num_agents: Number of agents
@@ -320,4 +319,9 @@ SCENARIOS = {
     "book_example_3": create_book_example_3,
     "single_slot_demand": create_single_slot_demand_scenario,
     "competitive": create_competitive_scenario,
+    "scalability": create_scalability_scenario,
+    "duplicate_example_1": create_duplicate_example_1,
+    "book_example_1_two_cpus": create_book_example_1_two_cpus,
+    "book_example_2_two_cpus": create_book_example_2_two_cpus,
+    "many_jobs_example": create_many_jobs_example,
 }

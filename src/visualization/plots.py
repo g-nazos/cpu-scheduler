@@ -278,7 +278,7 @@ def plot_epsilon_sensitivity(
     save_path: Optional[str] = None
 ) -> plt.Figure:
     """
-    Plot results of epsilon sensitivity analysis.
+    Plot results of epsilon sensitivity analysis (iterations vs epsilon).
 
     Args:
         sensitivity: Results from epsilon sensitivity analysis
@@ -288,35 +288,44 @@ def plot_epsilon_sensitivity(
     Returns:
         matplotlib Figure
     """
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-    ax1 = axes[0]
-    ax1.plot(sensitivity.epsilons, sensitivity.iterations, "bo-", linewidth=2, markersize=8)
-    ax1.set_xlabel("Epsilon (ε)", fontsize=11)
-    ax1.set_ylabel("Iterations", fontsize=11)
-    ax1.set_title("Iterations vs Epsilon", fontsize=12)
-    ax1.grid(True, alpha=0.3)
-
-    ax2 = axes[1]
-    colors = ["green" if eq else "red" for eq in sensitivity.equilibrium_achieved]
-    ax2.bar(range(len(sensitivity.epsilons)),
-            [1 if eq else 0 for eq in sensitivity.equilibrium_achieved],
-            color=colors, edgecolor="black")
-    ax2.set_xticks(range(len(sensitivity.epsilons)))
-    ax2.set_xticklabels([f"{e:.2f}" for e in sensitivity.epsilons], rotation=45)
-    ax2.set_xlabel("Epsilon (ε)", fontsize=11)
-    ax2.set_ylabel("Equilibrium Achieved", fontsize=11)
-    ax2.set_title("Equilibrium Achievement", fontsize=12)
-    ax2.set_ylim(0, 1.2)
-    ax2.set_yticks([0, 1])
-    ax2.set_yticklabels(["No", "Yes"])
-
+    fig, ax = plt.subplots(1, 1, figsize=(8, 5))
+    ax.plot(sensitivity.epsilons, sensitivity.iterations, "bo-", linewidth=2, markersize=8)
+    ax.set_xlabel("Epsilon (ε)", fontsize=11)
+    ax.set_ylabel("Iterations", fontsize=11)
+    ax.set_title("Iterations vs Epsilon", fontsize=12)
+    ax.grid(True, alpha=0.3)
     fig.suptitle(title, fontsize=14, y=1.02)
     plt.tight_layout()
-
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    return fig
 
+
+def plot_epsilon_sensitivity_all(
+    results: list[tuple[str, EpsilonSensitivityResult]],
+    save_path: Optional[str] = None,
+) -> plt.Figure:
+    """
+    Plot epsilon sensitivity for multiple experiments (one row per experiment:
+    iterations vs epsilon).
+    """
+    n = len(results)
+    if n == 0:
+        return None
+    fig, axes = plt.subplots(n, 1, figsize=(10, 4 * n))
+    if n == 1:
+        axes = [axes]
+    for i, (name, sensitivity) in enumerate(results):
+        ax = axes[i]
+        ax.plot(sensitivity.epsilons, sensitivity.iterations, "bo-", linewidth=2, markersize=6)
+        ax.set_ylabel("Iterations", fontsize=10)
+        ax.set_xlabel("Epsilon (ε)", fontsize=10)
+        ax.set_title(f"{name}: Iterations vs ε", fontsize=11)
+        ax.grid(True, alpha=0.3)
+    fig.suptitle("Epsilon Sensitivity — All Experiments", fontsize=14, y=1.01)
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
     return fig
 
 
