@@ -54,16 +54,22 @@ class Agent:
     def _has_consecutive_run(
         self, allocated_slots: Set[Slot] | FrozenSet[Slot], length: int
     ) -> bool:
-        """True iff allocated_slots contains a consecutive block of length slots before deadline."""
-        slot_ids = sorted(
-            s.slot_id for s in allocated_slots
-            if s.slot_id < self.deadline_slot_id
-        )
-        if len(slot_ids) < length:
-            return False
-        for i in range(len(slot_ids) - length + 1):
-            if slot_ids[i + length - 1] - slot_ids[i] == length - 1:
-                return True
+        """True iff allocated_slots contains a consecutive block of length slots before deadline on one CPU."""
+        # Group by CPU (multi-CPU) or treat all as one (single-CPU)
+        by_cpu: dict[int, list[int]] = {}
+        for s in allocated_slots:
+            t = s.get_time_index()
+            if t >= self.deadline_slot_id:
+                continue
+            c = s.cpu_id
+            by_cpu.setdefault(c, []).append(t)
+        for times in by_cpu.values():
+            if len(times) < length:
+                continue
+            times = sorted(set(times))
+            for i in range(len(times) - length + 1):
+                if times[i + length - 1] - times[i] == length - 1:
+                    return True
         return False
 
     def valuation(self, allocated_slots: Set[Slot] | FrozenSet[Slot]) -> float:
@@ -108,7 +114,7 @@ class Agent:
     
     def get_valid_slots(self, all_slots: list[Slot]) -> list[Slot]:
         """
-        Get all slots that are before this agent's deadline.
+        Get all slots that are before this agent's deadline (by time index; works for single- and multi-CPU).
         
         Args:
             all_slots: List of all available slots
@@ -116,7 +122,7 @@ class Agent:
         Returns:
             List of slots that are before the deadline
         """
-        return [slot for slot in all_slots if slot.slot_id < self.deadline_slot_id]
+        return [slot for slot in all_slots if slot.get_time_index() < self.deadline_slot_id]
     
     def find_best_bundle(
         self,
@@ -143,25 +149,30 @@ class Agent:
             Tuple of (best_bundle, best_surplus)
         """
         valid_slots = self.get_valid_slots(all_slots)
-        valid_slots = sorted(valid_slots, key=lambda s: s.slot_id)
-        
-        if len(valid_slots) < self.required_slots:
-            return frozenset(), 0.0
-        
+        # Group by CPU so we only consider consecutive time windows on a single CPU
+        by_cpu: dict[int, list[Slot]] = {}
+        for s in valid_slots:
+            by_cpu.setdefault(s.cpu_id, []).append(s)
+        for c in by_cpu:
+            by_cpu[c] = sorted(by_cpu[c], key=lambda s: s.get_time_index())
+
         best_bundle: FrozenSet[Slot] = frozenset()
         best_surplus = 0.0
-        
-        for i in range(len(valid_slots) - self.required_slots + 1):
-            window = valid_slots[i : i + self.required_slots]
-            ids = [s.slot_id for s in window]
-            if ids[-1] - ids[0] != self.required_slots - 1:
+
+        for _cpu, group in by_cpu.items():
+            if len(group) < self.required_slots:
                 continue
-            bundle = frozenset(window)
-            surplus = self.surplus(bundle, prices)
-            if surplus > best_surplus:
-                best_surplus = surplus
-                best_bundle = bundle
-        
+            for i in range(len(group) - self.required_slots + 1):
+                window = group[i : i + self.required_slots]
+                times = [s.get_time_index() for s in window]
+                if times[-1] - times[0] != self.required_slots - 1:
+                    continue
+                bundle = frozenset(window)
+                surplus = self.surplus(bundle, prices)
+                if surplus > best_surplus:
+                    best_surplus = surplus
+                    best_bundle = bundle
+
         if best_surplus < 0:
             return frozenset(), 0.0
         return best_bundle, best_surplus

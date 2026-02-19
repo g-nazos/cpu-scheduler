@@ -144,6 +144,19 @@ def create_book_example_2() -> Market:
     return Market(agents=agents, slots=slots)
 
 
+def create_book_example_2_two_cpus() -> Market:
+    """
+    Same as book example 2 but with 2 identical CPUs (4 slots: 9am and 10am on each CPU).
+    Same 2 jobs; each can be assigned a consecutive block on either CPU.
+    """
+    slots = create_slots(num_slots=2, reserve_price=3.0, start_hour=9, num_cpus=2)
+    agents = [
+        Agent(agent_id=1, name="Job1", deadline_slot_id=2, required_slots=2, worth=10.0),
+        Agent(agent_id=2, name="Job2", deadline_slot_id=2, required_slots=1, worth=6.0),
+    ]
+    return Market(agents=agents, slots=slots)
+
+
 def create_book_example_3() -> Market:
     """
     Create the "arbitrarily suboptimal" example.

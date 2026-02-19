@@ -30,6 +30,7 @@ from src.experiments.scenarios import (
     create_book_example_1,
     create_book_example_1_two_cpus,
     create_book_example_2,
+    create_book_example_2_two_cpus,
     create_book_example_3,
     create_many_jobs_example,
     create_duplicate_example_1,
@@ -157,18 +158,17 @@ def run_duplicate_example_1(epsilon: float = 0.25, show_trace: bool = True, two_
     return result, metrics
 
 
-def run_book_example_2() -> AuctionResult | None:
+def run_book_example_2(two_cpus: bool = False) -> AuctionResult | None:
     """
     Run the "no equilibrium" example from Table 2.1.
-
-    This demonstrates that competitive equilibrium may NOT exist
-    due to complementarity in valuations.
+    With two_cpus=True: 4 slots (2 times × 2 CPUs), same 2 jobs.
     """
     print("\n" + "=" * 70)
 
-    market = create_book_example_2()
+    market = create_book_example_2_two_cpus() if two_cpus else create_book_example_2()
+    slots_desc = "4 (2 CPUs × 9am, 10am)" if two_cpus else "2 (9am, 10am)"
     print(f"\nMarket Configuration:")
-    print(f"  Slots: 2 (9am, 10am), Reserve: $3.00/hour")
+    print(f"  Slots: {slots_desc}, Reserve: $3.00/hour")
     print(f"  Agents:")
     for agent in market.agents:
         print(f"    {agent.name}: λ={agent.required_slots}, d=slot_{agent.deadline_slot_id}, w=${agent.worth:.2f}")
@@ -321,6 +321,7 @@ Examples:
   python main.py --example 4 --two-cpus Run many jobs with 2 CPUs
   python main.py --example 5            Run duplicate of example 1 (8 identical job types)
   python main.py --example 5 --two-cpus Duplicate ex1 with 2 CPUs
+  python main.py --example 2 --two-cpus Example 2 with 2 CPUs (4 slots)
   python main.py --sensitivity       Run epsilon sensitivity analysis
   python main.py --all --save        Run all experiments and save plots
         """
@@ -339,7 +340,7 @@ Examples:
     parser.add_argument("--no-plots", action="store_true",
                        help="Disable plot display")
     parser.add_argument("--two-cpus", action="store_true",
-                       help="Use 2 identical CPUs (examples 1, 4, 5)")
+                       help="Use 2 identical CPUs (examples 1, 2, 4, 5)")
     
     args = parser.parse_args()
     
@@ -361,13 +362,14 @@ Examples:
             if not args.no_plots:
                 plt.show()
         elif args.example == 2:
-            result2 = run_book_example_2()
+            result2 = run_book_example_2(two_cpus=args.two_cpus)
             if args.save and result2 is not None:
                 output_dir = Path("output")
                 output_dir.mkdir(exist_ok=True)
-                plot_allocation_and_prices(result2, title="Allocation and Prices - Example 2",
-                                          save_path=str(output_dir / "ex2_allocation.png"))
-                print(f"\nPlot saved to {output_dir / 'ex2_allocation.png'}")
+                suffix = "_2cpus" if args.two_cpus else ""
+                plot_allocation_and_prices(result2, title=f"Allocation and Prices - Example 2{suffix}",
+                                          save_path=str(output_dir / f"ex2_allocation{suffix}.png"))
+                print(f"\nPlot saved to {output_dir / f'ex2_allocation{suffix}.png'}")
         elif args.example == 3:
             result3 = run_book_example_3()
             if args.save:
