@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.models.market import Market
-from src.auction.ascending import AscendingAuction
+from src.auction.ascending import AscendingAuction, AuctionResult
 from src.auction.equilibrium import check_equilibrium, print_equilibrium_report
 from src.experiments.scenarios import (
     create_book_example_1,
@@ -38,6 +38,7 @@ from src.experiments.metrics import (
 from src.visualization.plots import (
     plot_price_evolution,
     plot_allocation_timeline,
+    plot_allocation_and_prices,
     plot_epsilon_sensitivity,
     plot_convergence_trace,
 )
@@ -50,6 +51,20 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def print_final_market_state(result) -> None:
+    """Print final allocation and bid prices after an auction run."""
+    market = result.market
+    print("  Final allocation:")
+    for agent in market.agents:
+        slots = market.allocations.get(agent.agent_id, frozenset())
+        slot_ids = sorted([s.slot_id for s in slots])
+        print(f"    {agent.name}: slots {slot_ids}")
+    print("  Bid prices:")
+    for slot in market.slots:
+        price = market.bid_prices.get(slot.slot_id, slot.reserve_price)
+        print(f"    Slot {slot.slot_id} ({slot.time_label}): ${price:.2f}")
 
 
 def run_book_example_1(epsilon: float = 0.25, show_trace: bool = True) -> None:
@@ -75,12 +90,12 @@ def run_book_example_1(epsilon: float = 0.25, show_trace: bool = True) -> None:
     result = auction.run(market)
     
     if show_trace:
-        result.print_trace(max_rounds=30)
+        result.print_trace(max_rounds=100)
     
-    # Check equilibrium
     eq_result = check_equilibrium(result.market)
     print_equilibrium_report(eq_result, result.market)
-    
+    print("\nFinal market state:")
+    print_final_market_state(result)
     # Compute and print metrics
     metrics = compute_metrics(result, epsilon)
     print_metrics_report(metrics)
@@ -88,46 +103,48 @@ def run_book_example_1(epsilon: float = 0.25, show_trace: bool = True) -> None:
     return result, metrics
 
 
-def run_book_example_2() -> None:
+def run_book_example_2() -> AuctionResult | None:
     """
     Run the "no equilibrium" example from Table 2.1.
-    
+
     This demonstrates that competitive equilibrium may NOT exist
     due to complementarity in valuations.
     """
     print("\n" + "=" * 70)
-    
+
     market = create_book_example_2()
     print(f"\nMarket Configuration:")
     print(f"  Slots: 2 (9am, 10am), Reserve: $3.00/hour")
     print(f"  Agents:")
     for agent in market.agents:
         print(f"    {agent.name}: λ={agent.required_slots}, d=slot_{agent.deadline_slot_id}, w=${agent.worth:.2f}")
-    
-    # Run auction with different epsilons
+
+    last_result = None
     for eps in [0.25, 0.5, 1.0]:
         print(f"\nRunning auction with ε=${eps:.2f}...")
         auction = AscendingAuction(epsilon=eps, max_iterations=100)
         result = auction.run(market)
-        
+        last_result = result
+
         eq_result = check_equilibrium(result.market)
         print(f"  Iterations: {result.iterations}")
         print(f"  Solution: ${result.final_solution_value:.2f}")
+        print_final_market_state(result)
         print(f"  Is Equilibrium: {eq_result.is_equilibrium}")
-        
         if not eq_result.is_equilibrium and eq_result.violations:
             print(f"  Violations: {eq_result.violations[0]}")
+    return last_result
 
 
-def run_book_example_3() -> None:
+def run_book_example_3() -> AuctionResult:
     """
     Run the "arbitrarily suboptimal" example.
-    
+
     This demonstrates that the ascending auction can produce
     allocations arbitrarily far from optimal.
     """
     print("\n" + "=" * 70)
-    
+
     market = create_book_example_3()
     print(f"\nMarket Configuration:")
     print(f"  Slot 0: 9am, Reserve: $1.00")
@@ -135,21 +152,17 @@ def run_book_example_3() -> None:
     print(f"  Agents:")
     for agent in market.agents:
         print(f"    {agent.name}: λ={agent.required_slots}, d=slot_{agent.deadline_slot_id}, w=${agent.worth:.2f}")
-    
-    # Run auction
+
     print(f"\nRunning Ascending Auction with ε=$0.25...")
     auction = AscendingAuction(epsilon=0.25)
     result = auction.run(market)
-    
+
     print(f"\nAuction Result:")
     print(f"  Solution: ${result.final_solution_value:.2f}")
-    print(f"  Allocation:")
-    for agent in market.agents:
-        slots = result.market.allocations.get(agent.agent_id, frozenset())
-        slot_ids = sorted([s.slot_id for s in slots])
-        if slot_ids:
-            print(f"    {agent.name}: slots {slot_ids}")
+    print("  Final market state:")
+    print_final_market_state(result)
     print("\n  Note: By adjusting values, auction outcome can be made arbitrarily far from optimal.")
+    return result
 
 
 def run_epsilon_sensitivity_analysis(show_plots: bool = True) -> None:
@@ -197,26 +210,34 @@ def run_all_experiments(save_plots: bool = False) -> None:
     if save_plots:
         plot_price_evolution(result1, title="Price Evolution - Example 1 (ε=0.25)",
                             save_path=str(output_dir / "ex1_prices_025.png"))
-        plot_allocation_timeline(result1.market, title="Allocation - Example 1 (ε=0.25)",
-                                save_path=str(output_dir / "ex1_allocation_025.png"))
-    
+        plot_allocation_and_prices(result1, title="Allocation and Prices - Example 1 (ε=0.25)",
+                                  save_path=str(output_dir / "ex1_allocation_025.png"))
     # Example 1 with ε=1.0 (should NOT converge to equilibrium)
     print("\n" + "#" * 70)
     print("# Running Book Example 1 with ε=1.0")
     print("#" * 70)
     result1b, metrics1b = run_book_example_1(epsilon=1.0, show_trace=True)
-    
+    if save_plots:
+        plot_price_evolution(result1b, title="Price Evolution - Example 1 (ε=1.0)",
+                            save_path=str(output_dir / "ex1_prices_10.png"))
+        plot_allocation_and_prices(result1b, title="Allocation and Prices - Example 1 (ε=1.0)",
+                                  save_path=str(output_dir / "ex1_allocation_10.png"))
     # Example 2 (no equilibrium)
     print("\n" + "#" * 70)
     print("# Running Book Example 2 (No Equilibrium Case)")
     print("#" * 70)
-    run_book_example_2()
-    
+    result2 = run_book_example_2()
+    if save_plots and result2 is not None:
+        plot_allocation_and_prices(result2, title="Allocation and Prices - Example 2",
+                                  save_path=str(output_dir / "ex2_allocation.png"))
     # Example 3 (suboptimal)
     print("\n" + "#" * 70)
     print("# Running Book Example 3 (Suboptimal Case)")
     print("#" * 70)
-    run_book_example_3()
+    result3 = run_book_example_3()
+    if save_plots and result3 is not None:
+        plot_allocation_and_prices(result3, title="Allocation and Prices - Example 3",
+                                  save_path=str(output_dir / "ex3_allocation.png"))
     
     # Epsilon sensitivity
     print("\n" + "#" * 70)
@@ -269,13 +290,30 @@ Examples:
         if args.all:
             run_all_experiments(save_plots=args.save)
         elif args.example == 1:
-            run_book_example_1(epsilon=args.eps)
+            result1, _ = run_book_example_1(epsilon=args.eps)
+            if args.save:
+                output_dir = Path("output")
+                output_dir.mkdir(exist_ok=True)
+                plot_allocation_and_prices(result1, title=f"Allocation and Prices - Example 1 (ε={args.eps})",
+                                          save_path=str(output_dir / f"ex1_allocation_eps{args.eps}.png"))
             if not args.no_plots:
                 plt.show()
         elif args.example == 2:
-            run_book_example_2()
+            result2 = run_book_example_2()
+            if args.save and result2 is not None:
+                output_dir = Path("output")
+                output_dir.mkdir(exist_ok=True)
+                plot_allocation_and_prices(result2, title="Allocation and Prices - Example 2",
+                                          save_path=str(output_dir / "ex2_allocation.png"))
+                print(f"\nPlot saved to {output_dir / 'ex2_allocation.png'}")
         elif args.example == 3:
-            run_book_example_3()
+            result3 = run_book_example_3()
+            if args.save:
+                output_dir = Path("output")
+                output_dir.mkdir(exist_ok=True)
+                plot_allocation_and_prices(result3, title="Allocation and Prices - Example 3",
+                                          save_path=str(output_dir / "ex3_allocation.png"))
+                print(f"\nPlot saved to {output_dir / 'ex3_allocation.png'}")
         elif args.sensitivity:
             run_epsilon_sensitivity_analysis(show_plots=not args.no_plots)
     except KeyboardInterrupt:

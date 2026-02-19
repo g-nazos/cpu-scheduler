@@ -127,6 +127,59 @@ def plot_allocation_timeline(
     return fig
 
 
+def plot_allocation_and_prices(
+    result: AuctionResult,
+    title: str = "Allocation and Slot Prices",
+    save_path: Optional[str] = None
+) -> plt.Figure:
+    """
+    Plot allocation with bid price shown inside each slot bar.
+
+    Single Gantt-style panel: each slot bar shows owner and price (e.g. "Job2  $5.00").
+
+    Args:
+        result: Auction result (market with allocations and bid_prices)
+        title: Plot title
+        save_path: Path to save figure (if provided)
+
+    Returns:
+        matplotlib Figure
+    """
+    market = result.market
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    colors = plt.cm.Set3(np.linspace(0, 1, len(market.agents) + 1))
+    agent_colors = {agent.agent_id: colors[i] for i, agent in enumerate(market.agents)}
+    agent_colors[None] = colors[-1]
+
+    for slot in market.slots:
+        owner = market.get_slot_owner(slot)
+        owner_id = owner.agent_id if owner else None
+        color = agent_colors[owner_id]
+        price = market.bid_prices.get(slot.slot_id, slot.reserve_price)
+        ax.barh(slot.slot_id, 1, left=0, height=0.8,
+                color=color, edgecolor="black", linewidth=1)
+        label = (owner.name if owner else "Unalloc") + f"  ${price:.2f}"
+        ax.text(0.5, slot.slot_id, label, ha="center", va="center", fontsize=10)
+
+    ax.set_yticks([s.slot_id for s in market.slots])
+    ax.set_yticklabels([s.time_label for s in market.slots])
+    ax.set_ylabel("Time Slot", fontsize=12)
+    ax.set_xlabel("CPU", fontsize=12)
+    ax.set_title(title, fontsize=14)
+    ax.set_xlim(0, 1)
+    ax.set_xticks([])
+    patches = [mpatches.Patch(color=agent_colors[a.agent_id], label=a.name)
+               for a in market.agents]
+    patches.append(mpatches.Patch(color=agent_colors[None], label="Unallocated"))
+    ax.legend(handles=patches, loc="upper left", bbox_to_anchor=(1.02, 1))
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    return fig
+
+
 def plot_solution_value_comparison(
     auction_solution_value: float,
     reserve_solution_value: float,

@@ -22,8 +22,9 @@ class Agent:
     - A worth w_i: the value if the job completes on time
     
     The valuation function v_i(F_i) is defined as:
-        v_i(F_i) = w_i  if F_i includes λ_i slots before d_i
+        v_i(F_i) = w_i  if F_i includes λ_i consecutive slots before d_i
                  = 0    otherwise
+    (Jobs require a contiguous block of time slots.)
     
     Attributes:
         agent_id: Unique identifier for the agent
@@ -50,11 +51,26 @@ class Agent:
         return (f"Agent({self.agent_id}, '{self.name}', "
                 f"d={self.deadline_slot_id}, λ={self.required_slots}, w={self.worth})")
     
+    def _has_consecutive_run(
+        self, allocated_slots: Set[Slot] | FrozenSet[Slot], length: int
+    ) -> bool:
+        """True iff allocated_slots contains a consecutive block of length slots before deadline."""
+        slot_ids = sorted(
+            s.slot_id for s in allocated_slots
+            if s.slot_id < self.deadline_slot_id
+        )
+        if len(slot_ids) < length:
+            return False
+        for i in range(len(slot_ids) - length + 1):
+            if slot_ids[i + length - 1] - slot_ids[i] == length - 1:
+                return True
+        return False
+
     def valuation(self, allocated_slots: Set[Slot] | FrozenSet[Slot]) -> float:
         """
         Compute the valuation v_i(F_i) for a given bundle of slots.
         
-        v_i(F_i) = w_i  if F_i includes λ_i slots before deadline d_i
+        v_i(F_i) = w_i  if F_i includes λ_i consecutive slots before deadline d_i
                  = 0    otherwise
         
         Args:
@@ -65,14 +81,7 @@ class Agent:
         """
         if not allocated_slots:
             return 0.0
-        
-        # Count slots that are before the deadline
-        slots_before_deadline = sum(
-            1 for slot in allocated_slots
-            if slot.slot_id < self.deadline_slot_id
-        )
-        
-        if slots_before_deadline >= self.required_slots:
+        if self._has_consecutive_run(allocated_slots, self.required_slots):
             return self.worth
         return 0.0
     
@@ -121,8 +130,9 @@ class Agent:
         This implements the argmax in the ascending auction:
         S* = argmax_{S⊆X, S⊇F_i} (v_i(S) - Σ_{j∈S} p_j)
         
-        For the scheduling problem, we need to find the cheapest
-        set of required_slots slots before the deadline, or the empty set.
+        For the scheduling problem, we only consider consecutive slot bundles
+        (contiguous blocks). We find the consecutive window of required_slots
+        slots before the deadline that maximizes surplus, or the empty set.
         
         Args:
             all_slots: List of all available slots
@@ -133,20 +143,25 @@ class Agent:
             Tuple of (best_bundle, best_surplus)
         """
         valid_slots = self.get_valid_slots(all_slots)
+        valid_slots = sorted(valid_slots, key=lambda s: s.slot_id)
         
-        # If not enough slots available before deadline, return empty
         if len(valid_slots) < self.required_slots:
             return frozenset(), 0.0
         
-        # Sort valid slots by price (ascending)
-        sorted_slots = sorted(valid_slots, key=lambda s: prices.get(s.slot_id, 0.0))
+        best_bundle: FrozenSet[Slot] = frozenset()
+        best_surplus = 0.0
         
-        # The best bundle is the cheapest required_slots slots
-        best_bundle = frozenset(sorted_slots[:self.required_slots])
-        best_surplus = self.surplus(best_bundle, prices)
+        for i in range(len(valid_slots) - self.required_slots + 1):
+            window = valid_slots[i : i + self.required_slots]
+            ids = [s.slot_id for s in window]
+            if ids[-1] - ids[0] != self.required_slots - 1:
+                continue
+            bundle = frozenset(window)
+            surplus = self.surplus(bundle, prices)
+            if surplus > best_surplus:
+                best_surplus = surplus
+                best_bundle = bundle
         
-        # Compare with empty bundle (surplus = 0)
         if best_surplus < 0:
             return frozenset(), 0.0
-        
         return best_bundle, best_surplus
