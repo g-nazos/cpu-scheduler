@@ -1,10 +1,3 @@
-"""
-Agent (job) representation for the scheduling problem.
-
-Based on Definition 2.3.10 from Section 2.3.3 of "Multiagent Systems"
-by Shoham & Leyton-Brown.
-"""
-
 from dataclasses import dataclass
 from typing import FrozenSet, Set
 

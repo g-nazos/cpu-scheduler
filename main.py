@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-Distributed CPU Scheduling via Ascending Auctions
-
-Main entry point for running experiments based on Section 2.3.3
-of "Multiagent Systems" by Shoham & Leyton-Brown.
-
 Usage:
     python main.py                     # Run all book examples
     python main.py --example 1         # Run book example 1 (8-slot)

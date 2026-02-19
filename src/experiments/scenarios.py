@@ -1,10 +1,3 @@
-"""
-Experimental Scenarios from Section 2.3.3.
-
-Creates the book examples and custom scenarios for testing
-the ascending auction algorithm.
-"""
-
 from src.models.agent import Agent
 from src.models.slot import Slot, create_slots, create_slots_with_prices
 from src.models.market import Market
@@ -12,8 +5,6 @@ from src.models.market import Market
 
 def create_book_example_1() -> Market:
     """
-    Create the main 8-slot processor example from Section 2.3.3.
-    
     8 time slots: 9am-5pm, reserve price $3/hour
     4 jobs:
         Job 1: 2 hours, deadline 1:00 PM, worth $10.00
@@ -75,8 +66,6 @@ def create_book_example_1() -> Market:
 
 def create_book_example_1_two_cpus() -> Market:
     """
-    Same as book example 1 but with 2 identical CPUs (16 slots total).
-    
     8 time slots × 2 CPUs: slot_ids 0–7 = CPU 0, 8–15 = CPU 1 (same times).
     Jobs are unchanged; each job can be assigned a consecutive block on either CPU.
     """
@@ -112,8 +101,6 @@ def create_duplicate_example_1(num_cpus: int = 1) -> Market:
 
 def create_book_example_2() -> Market:
     """
-    Create the Table 2.1 example (2 slots, 2 jobs).
-    
     2 slots: 9am, 10am, reserve $3/hour
     2 jobs:
         Job 1: 2 hours, deadline 11:00 AM, worth $10.00
@@ -226,9 +213,7 @@ def create_single_slot_demand_scenario(
 ) -> Market:
     """
     Create a scenario where each agent demands only 1 slot.
-    
-    According to Theorem 2.3.14, under these conditions a competitive equilibrium exists.
-    
+      
     Args:
         num_agents: Number of agents
         num_slots: Number of time slots
