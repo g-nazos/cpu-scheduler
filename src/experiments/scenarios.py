@@ -42,28 +42,28 @@ def create_book_example_1() -> Market:
     agents = [
         Agent(
             agent_id=1,
-            name="Job1",
+            name="Agent1",
             deadline_slot_id=4,  # Before 1:00 PM means slots 0,1,2,3 (9am-12pm)
             required_slots=2,
             worth=10.0
         ),
         Agent(
             agent_id=2,
-            name="Job2",
+            name="Agent2",
             deadline_slot_id=3,  # Before 12:00 PM means slots 0,1,2 (9am-11am)
             required_slots=2,
             worth=16.0
         ),
         Agent(
             agent_id=3,
-            name="Job3",
+            name="Agent3",
             deadline_slot_id=3,  # Before 12:00 PM means slots 0,1,2 (9am-11am)
             required_slots=1,
             worth=6.0
         ),
         Agent(
             agent_id=4,
-            name="Job4",
+            name="Agent4",
             deadline_slot_id=8,  # Before 5:00 PM means all slots
             required_slots=4,
             worth=14.5
@@ -82,7 +82,7 @@ def create_book_example_1_two_cpus() -> Market:
     """
     slots = create_slots(num_slots=8, reserve_price=3.0, start_hour=9, num_cpus=2)
     agents = [
-        Agent(agent_id=1, name="Job1", deadline_slot_id=4, required_slots=2, worth=10.0),
+        Agent(agent_id=1, name="Agent1", deadline_slot_id=4, required_slots=2, worth=10.0),
         Agent(agent_id=2, name="Job2", deadline_slot_id=3, required_slots=2, worth=16.0),
         Agent(agent_id=3, name="Job3", deadline_slot_id=3, required_slots=1, worth=6.0),
         Agent(agent_id=4, name="Job4", deadline_slot_id=8, required_slots=4, worth=14.5),
@@ -97,14 +97,14 @@ def create_duplicate_example_1(num_cpus: int = 1) -> Market:
     """
     slots = create_slots(num_slots=8, reserve_price=3.0, start_hour=9, num_cpus=num_cpus)
     agents = [
-        Agent(agent_id=1, name="2SlotsDead4", deadline_slot_id=4, required_slots=2, worth=10.0),
-        Agent(agent_id=2, name="2SlotsDead3", deadline_slot_id=3, required_slots=2, worth=16.0),
-        Agent(agent_id=3, name="1SlotsDead3", deadline_slot_id=3, required_slots=1, worth=6.0),
-        Agent(agent_id=4, name="4SlotsDead8", deadline_slot_id=8, required_slots=4, worth=14.5),
-        Agent(agent_id=5, name="2SlotsDead4_2", deadline_slot_id=4, required_slots=2, worth=10.0),
-        Agent(agent_id=6, name="2SlotsDead3_2", deadline_slot_id=3, required_slots=2, worth=16.0),
-        Agent(agent_id=7, name="1SlotsDead3_2", deadline_slot_id=3, required_slots=1, worth=6.0),
-        Agent(agent_id=8, name="4SlotsDead8_2", deadline_slot_id=8, required_slots=4, worth=14.5),
+        Agent(agent_id=1, name="2SlotsDeadline4", deadline_slot_id=4, required_slots=2, worth=10.0),
+        Agent(agent_id=2, name="2SlotsDeadline3", deadline_slot_id=3, required_slots=2, worth=16.0),
+        Agent(agent_id=3, name="1SlotsDeadline3", deadline_slot_id=3, required_slots=1, worth=6.0),
+        Agent(agent_id=4, name="4SlotsDeadline8", deadline_slot_id=8, required_slots=4, worth=14.5),
+        Agent(agent_id=5, name="2SlotsDeadline4_2", deadline_slot_id=4, required_slots=2, worth=10.0),
+        Agent(agent_id=6, name="2SlotsDeadline3_2", deadline_slot_id=3, required_slots=2, worth=16.0),
+        Agent(agent_id=7, name="1SlotsDeadline3_2", deadline_slot_id=3, required_slots=1, worth=6.0),
+        Agent(agent_id=8, name="4SlotsDeadline8_2", deadline_slot_id=8, required_slots=4, worth=14.5),
     ]
     
     return Market(agents=agents, slots=slots)
@@ -312,6 +312,55 @@ def create_scalability_scenario(
     return Market(agents=agents, slots=slots)
 
 
+# Nighttime = 10 PM–6 AM (slot indices 22, 23, 0, 1, 2, 3, 4, 5 in 24-hour day starting at midnight)
+_NIGHT_SLOT_INDICES = {0, 1, 2, 3, 4, 5, 22, 23}
+
+
+def create_24h_night_discount_scenario(
+    num_agents: int = 20,
+    day_reserve: float = 2.0,
+    night_reserve: float = 1.0,
+    num_cpus: int = 1,
+) -> Market:
+    """
+    Create a 24-hour scenario with discounted nighttime reserve prices and configurable jobs.
+    
+    24 consecutive hourly slots (midnight–11 PM) per CPU. Night slots (10 PM–6 AM) have
+    lower reserve prices to encourage off-peak use. With num_cpus=2, 48 slots total.
+    
+    Args:
+        num_agents: Number of jobs (default 20)
+        day_reserve: Reserve price for daytime slots (6 AM–10 PM)
+        night_reserve: Reserve price for nighttime slots (10 PM–6 AM)
+        num_cpus: Number of identical CPUs (1 or 2)
+    """
+    import random
+    
+    reserve_prices = [
+        night_reserve if t in _NIGHT_SLOT_INDICES else day_reserve
+        for t in range(24)
+    ]
+    slots = create_slots_with_prices(
+        reserve_prices=reserve_prices, start_hour=0, num_cpus=num_cpus
+    )
+    
+    agents = []
+    for i in range(num_agents):
+        required = random.randint(1, min(3, 24))
+        deadline = random.randint(required, 24)
+        base = night_reserve * required
+        worth = random.uniform(base + 1, base + 10)
+        agents.append(Agent(
+            agent_id=i + 1,
+            name=f"Agent{i + 1} ({required}h)",
+            deadline_slot_id=deadline,
+            required_slots=required,
+            worth=round(worth, 2)
+        ))
+    
+    return Market(agents=agents, slots=slots)
+
+
 # Dictionary mapping scenario names to creator functions
 SCENARIOS = {
     "book_example_1": create_book_example_1,
@@ -320,6 +369,7 @@ SCENARIOS = {
     "single_slot_demand": create_single_slot_demand_scenario,
     "competitive": create_competitive_scenario,
     "scalability": create_scalability_scenario,
+    "24h_night_discount": create_24h_night_discount_scenario,
     "duplicate_example_1": create_duplicate_example_1,
     "book_example_1_two_cpus": create_book_example_1_two_cpus,
     "book_example_2_two_cpus": create_book_example_2_two_cpus,

@@ -68,6 +68,7 @@ class EpsilonSensitivityResult:
     """Result of epsilon sensitivity analysis."""
     epsilons: list[float]
     iterations: list[int]
+    solution_values: list[float]
 
 
 def run_epsilon_sensitivity(
@@ -89,8 +90,14 @@ def run_epsilon_sensitivity(
     from src.auction.ascending import AscendingAuction
 
     iterations = []
+    solution_values = []
     for eps in epsilons:
         auction = AscendingAuction(epsilon=eps, max_iterations=max_iterations)
         result = auction.run(market)
         iterations.append(result.iterations)
-    return EpsilonSensitivityResult(epsilons=epsilons, iterations=iterations)
+        solution_values.append(result.final_solution_value)
+    return EpsilonSensitivityResult(
+        epsilons=epsilons,
+        iterations=iterations,
+        solution_values=solution_values,
+    )

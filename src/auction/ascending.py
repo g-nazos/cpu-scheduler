@@ -115,7 +115,7 @@ class AscendingAuction:
                     market.slots, ask_prices, current_allocation
                 )
                 
-                # Determine new slots to bid on
+                # Determine new slots to bid on (discrepancy from the book exammples)
                 new_slots = best_bundle - current_allocation
                 
                 # Record the round

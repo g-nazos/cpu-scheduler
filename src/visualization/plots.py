@@ -278,7 +278,7 @@ def plot_epsilon_sensitivity(
     save_path: Optional[str] = None
 ) -> plt.Figure:
     """
-    Plot results of epsilon sensitivity analysis (iterations vs epsilon).
+    Plot epsilon sensitivity: epsilon vs iterations and epsilon vs solution value.
 
     Args:
         sensitivity: Results from epsilon sensitivity analysis
@@ -288,14 +288,24 @@ def plot_epsilon_sensitivity(
     Returns:
         matplotlib Figure
     """
-    fig, ax = plt.subplots(1, 1, figsize=(8, 5))
-    ax.plot(sensitivity.epsilons, sensitivity.iterations, "bo-", linewidth=2, markersize=8)
-    ax.set_xlabel("Epsilon (ε)", fontsize=11)
-    ax.set_ylabel("Iterations", fontsize=11)
-    ax.set_title("Iterations vs Epsilon", fontsize=12)
-    ax.grid(True, alpha=0.3)
-    fig.suptitle(title, fontsize=14, y=1.02)
-    plt.tight_layout()
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    ax1 = axes[0]
+    ax1.plot(sensitivity.epsilons, sensitivity.iterations, "bo-", linewidth=1, markersize=4)
+    ax1.set_xlabel("Epsilon (ε)", fontsize=11)
+    ax1.set_ylabel("Iterations", fontsize=11)
+    ax1.set_title("Epsilon vs Iterations", fontsize=12)
+    ax1.grid(True, alpha=0.3)
+
+    ax2 = axes[1]
+    ax2.plot(sensitivity.epsilons, sensitivity.solution_values, "go-", linewidth=1, markersize=4)
+    ax2.set_xlabel("Epsilon (ε)", fontsize=11)
+    ax2.set_ylabel("Solution Value ($)", fontsize=11)
+    ax2.set_title("Epsilon vs Solution Value", fontsize=12)
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.92])
+    fig.suptitle(title, fontsize=14, y=0.98)
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
     return fig
@@ -306,24 +316,32 @@ def plot_epsilon_sensitivity_all(
     save_path: Optional[str] = None,
 ) -> plt.Figure:
     """
-    Plot epsilon sensitivity for multiple experiments (one row per experiment:
-    iterations vs epsilon).
+    Plot epsilon sensitivity for multiple experiments. Each row: epsilon vs iterations,
+    epsilon vs solution value.
     """
     n = len(results)
     if n == 0:
         return None
-    fig, axes = plt.subplots(n, 1, figsize=(10, 4 * n))
+    row_h = 3.0 if n > 5 else 4.0
+    fig, axes = plt.subplots(n, 2, figsize=(12, row_h * n))
     if n == 1:
-        axes = [axes]
+        axes = axes.reshape(1, -1)
     for i, (name, sensitivity) in enumerate(results):
-        ax = axes[i]
-        ax.plot(sensitivity.epsilons, sensitivity.iterations, "bo-", linewidth=2, markersize=6)
-        ax.set_ylabel("Iterations", fontsize=10)
-        ax.set_xlabel("Epsilon (ε)", fontsize=10)
-        ax.set_title(f"{name}: Iterations vs ε", fontsize=11)
-        ax.grid(True, alpha=0.3)
-    fig.suptitle("Epsilon Sensitivity — All Experiments", fontsize=14, y=1.01)
-    plt.tight_layout()
+        ax1, ax2 = axes[i, 0], axes[i, 1]
+        ax1.plot(sensitivity.epsilons, sensitivity.iterations, "bo-", linewidth=2, markersize=6)
+        ax1.set_ylabel("Iterations", fontsize=10)
+        ax1.set_title(f"{name}: ε vs Iterations", fontsize=11)
+        ax1.grid(True, alpha=0.3)
+        if i == 0:
+            ax1.set_xlabel("Epsilon (ε)", fontsize=10)
+        ax2.plot(sensitivity.epsilons, sensitivity.solution_values, "go-", linewidth=2, markersize=6)
+        ax2.set_ylabel("Solution Value ($)", fontsize=10)
+        ax2.set_title(f"{name}: ε vs Solution Value", fontsize=11)
+        ax2.grid(True, alpha=0.3)
+        if i == 0:
+            ax2.set_xlabel("Epsilon (ε)", fontsize=10)
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.suptitle("Epsilon Sensitivity — All Experiments", fontsize=14, y=0.98)
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
     return fig
