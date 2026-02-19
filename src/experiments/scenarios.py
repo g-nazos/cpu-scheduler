@@ -73,6 +73,43 @@ def create_book_example_1() -> Market:
     return Market(agents=agents, slots=slots)
 
 
+def create_book_example_1_two_cpus() -> Market:
+    """
+    Same as book example 1 but with 2 identical CPUs (16 slots total).
+    
+    8 time slots × 2 CPUs: slot_ids 0–7 = CPU 0, 8–15 = CPU 1 (same times).
+    Jobs are unchanged; each job can be assigned a consecutive block on either CPU.
+    """
+    slots = create_slots(num_slots=8, reserve_price=3.0, start_hour=9, num_cpus=2)
+    agents = [
+        Agent(agent_id=1, name="Job1", deadline_slot_id=4, required_slots=2, worth=10.0),
+        Agent(agent_id=2, name="Job2", deadline_slot_id=3, required_slots=2, worth=16.0),
+        Agent(agent_id=3, name="Job3", deadline_slot_id=3, required_slots=1, worth=6.0),
+        Agent(agent_id=4, name="Job4", deadline_slot_id=8, required_slots=4, worth=14.5),
+    ]
+    return Market(agents=agents, slots=slots)
+
+
+def create_duplicate_example_1(num_cpus: int = 1) -> Market:
+    """
+    Exactly duplicate jobs of book example 1: same 4 job types, each repeated once (8 jobs total).
+    Same 8 time slots (or 16 with 2 CPUs). Job5–Job8 have same (deadline, length, worth) as Job1–Job4.
+    """
+    slots = create_slots(num_slots=8, reserve_price=3.0, start_hour=9, num_cpus=num_cpus)
+    agents = [
+        Agent(agent_id=1, name="2SlotsDead4", deadline_slot_id=4, required_slots=2, worth=10.0),
+        Agent(agent_id=2, name="2SlotsDead3", deadline_slot_id=3, required_slots=2, worth=16.0),
+        Agent(agent_id=3, name="1SlotsDead3", deadline_slot_id=3, required_slots=1, worth=6.0),
+        Agent(agent_id=4, name="4SlotsDead8", deadline_slot_id=8, required_slots=4, worth=14.5),
+        Agent(agent_id=5, name="2SlotsDead4_2", deadline_slot_id=4, required_slots=2, worth=10.0),
+        Agent(agent_id=6, name="2SlotsDead3_2", deadline_slot_id=3, required_slots=2, worth=16.0),
+        Agent(agent_id=7, name="1SlotsDead3_2", deadline_slot_id=3, required_slots=1, worth=6.0),
+        Agent(agent_id=8, name="4SlotsDead8_2", deadline_slot_id=8, required_slots=4, worth=14.5),
+    ]
+    
+    return Market(agents=agents, slots=slots)
+
+
 def create_book_example_2() -> Market:
     """
     Create the "no equilibrium" example from Table 2.1.
@@ -141,6 +178,31 @@ def create_book_example_3() -> Market:
         ),
     ]
     
+    return Market(agents=agents, slots=slots)
+
+
+def create_many_jobs_example(
+    num_slots: int = 8,
+    reserve_price: float = 3.0,
+    num_cpus: int = 1,
+) -> Market:
+    """
+    Example with many jobs (8) competing for 8 time slots (or 16 with 2 CPUs).
+    
+    8 time slots: 9am-5pm, reserve $3/hour. Jobs have mixed deadlines,
+    required lengths (1–3 slots), and worths so the auction has real competition.
+    """
+    slots = create_slots(num_slots=num_slots, reserve_price=reserve_price, start_hour=9, num_cpus=num_cpus)
+    agents = [
+        Agent(agent_id=1, name="Job1", deadline_slot_id=3, required_slots=2, worth=12.0),   # by 12pm, 2h
+        Agent(agent_id=2, name="Job2", deadline_slot_id=3, required_slots=1, worth=8.0),   # by 12pm, 1h
+        Agent(agent_id=3, name="Job3", deadline_slot_id=4, required_slots=2, worth=14.0),   # by 1pm, 2h
+        Agent(agent_id=4, name="Job4", deadline_slot_id=4, required_slots=1, worth=5.0),    # by 1pm, 1h
+        Agent(agent_id=5, name="Job5", deadline_slot_id=6, required_slots=2, worth=11.0),   # by 3pm, 2h
+        Agent(agent_id=6, name="Job6", deadline_slot_id=6, required_slots=1, worth=7.0),   # by 3pm, 1h
+        Agent(agent_id=7, name="Job7", deadline_slot_id=8, required_slots=3, worth=18.0),  # by 5pm, 3h
+        Agent(agent_id=8, name="Job8", deadline_slot_id=8, required_slots=2, worth=10.0),  # by 5pm, 2h
+    ]
     return Market(agents=agents, slots=slots)
 
 
