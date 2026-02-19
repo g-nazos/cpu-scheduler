@@ -50,8 +50,7 @@ def plot_price_evolution(
     colors = plt.cm.tab10(np.linspace(0, 1, num_slots))
     for i, prices in enumerate(prices_by_slot):
         slot = result.market.slots[i]
-        ax.plot(rounds, prices, label=f"Slot {i} ({slot.time_label})", 
-                color=colors[i], linewidth=2)
+        ax.plot(rounds, prices, label=_slot_ylabel(slot), color=colors[i], linewidth=2)
     
     ax.set_xlabel("Round", fontsize=12)
     ax.set_ylabel("Bid Price ($)", fontsize=12)
@@ -67,6 +66,31 @@ def plot_price_evolution(
     return fig
 
 
+def _slot_ylabel(slot) -> str:
+    """Label for y-axis: show CPU when multi-CPU."""
+    if getattr(slot, "time_index", None) is not None:
+        return f"CPU{slot.cpu_id} {slot.time_label}"
+    return slot.time_label
+
+
+def _is_multi_cpu(market: Market) -> bool:
+    """True if market has multiple CPUs (slots have time_index set)."""
+    if not market.slots:
+        return False
+    return getattr(market.slots[0], "time_index", None) is not None
+
+
+def _slots_by_cpu(market: Market) -> dict[int, list]:
+    """Group slots by cpu_id, sorted by time_index (for multi-CPU). Returns {cpu_id: [slot, ...]}."""
+    by_cpu: dict[int, list] = {}
+    for s in market.slots:
+        c = getattr(s, "cpu_id", 0)
+        by_cpu.setdefault(c, []).append(s)
+    for c in by_cpu:
+        by_cpu[c] = sorted(by_cpu[c], key=lambda s: s.get_time_index() if hasattr(s, "get_time_index") else s.slot_id)
+    return by_cpu
+
+
 def plot_allocation_timeline(
     market: Market,
     title: str = "Allocation Timeline",
@@ -74,56 +98,63 @@ def plot_allocation_timeline(
 ) -> plt.Figure:
     """
     Plot a Gantt-chart style allocation timeline.
-    
-    Args:
-        market: Market with allocations
-        title: Plot title
-        save_path: Path to save figure (if provided)
-        
-    Returns:
-        matplotlib Figure
+    For 2 CPUs: two panels side by side (CPU 0 left, CPU 1 right), same time on y-axis.
     """
-    fig, ax = plt.subplots(figsize=(12, 6))
-    
     colors = plt.cm.Set3(np.linspace(0, 1, len(market.agents) + 1))
     agent_colors = {agent.agent_id: colors[i] for i, agent in enumerate(market.agents)}
-    agent_colors[None] = colors[-1]  # Unallocated
-    
-    # Plot each slot
-    for slot in market.slots:
-        owner = market.get_slot_owner(slot)
-        owner_id = owner.agent_id if owner else None
-        color = agent_colors[owner_id]
-        
-        ax.barh(slot.slot_id, 1, left=0, height=0.8, 
-                color=color, edgecolor="black", linewidth=1)
-        
-        # Add label
-        label = owner.name if owner else "Unalloc"
-        ax.text(0.5, slot.slot_id, label, ha="center", va="center", fontsize=10)
-    
-    # Y-axis labels (slot times)
-    ax.set_yticks([s.slot_id for s in market.slots])
-    ax.set_yticklabels([s.time_label for s in market.slots])
-    
-    ax.set_xlabel("Allocation", fontsize=12)
-    ax.set_ylabel("Time Slot", fontsize=12)
-    ax.set_title(title, fontsize=14)
-    
-    # Legend
-    patches = [mpatches.Patch(color=agent_colors[a.agent_id], label=a.name) 
-               for a in market.agents]
-    patches.append(mpatches.Patch(color=agent_colors[None], label="Unallocated"))
-    ax.legend(handles=patches, loc="upper left", bbox_to_anchor=(1.02, 1))
-    
-    ax.set_xlim(0, 1)
-    ax.set_xticks([])
-    
+    agent_colors[None] = colors[-1]
+
+    if _is_multi_cpu(market):
+        by_cpu = _slots_by_cpu(market)
+        cpus = sorted(by_cpu.keys())
+        n_cpus = len(cpus)
+        n_times = max(len(by_cpu[c]) for c in cpus) if cpus else 0
+        fig, axes = plt.subplots(1, n_cpus, figsize=(5 * n_cpus, max(5, n_times * 0.6)), sharey=True)
+        if n_cpus == 1:
+            axes = [axes]
+        for idx, cpu in enumerate(cpus):
+            ax = axes[idx]
+            slots = by_cpu[cpu]
+            for slot in slots:
+                owner = market.get_slot_owner(slot)
+                owner_id = owner.agent_id if owner else None
+                color = agent_colors[owner_id]
+                y = slot.get_time_index()
+                ax.barh(y, 1, left=0, height=0.8, color=color, edgecolor="black", linewidth=1)
+                label = owner.name if owner else "Unalloc"
+                ax.text(0.5, y, label, ha="center", va="center", fontsize=10)
+            ax.set_yticks([s.get_time_index() for s in slots])
+            ax.set_yticklabels([s.time_label for s in slots])
+            ax.set_ylabel("Time" if idx == 0 else "")
+            ax.set_xlim(0, 1)
+            ax.set_xticks([])
+            ax.set_title(f"CPU {cpu}", fontsize=12)
+        fig.suptitle(title, fontsize=14)
+        patches = [mpatches.Patch(color=agent_colors[a.agent_id], label=a.name) for a in market.agents]
+        patches.append(mpatches.Patch(color=agent_colors[None], label="Unallocated"))
+        axes[-1].legend(handles=patches, loc="upper left", bbox_to_anchor=(1.02, 1))
+    else:
+        fig, ax = plt.subplots(figsize=(12, max(6, len(market.slots) * 0.35)))
+        for slot in market.slots:
+            owner = market.get_slot_owner(slot)
+            owner_id = owner.agent_id if owner else None
+            color = agent_colors[owner_id]
+            ax.barh(slot.slot_id, 1, left=0, height=0.8, color=color, edgecolor="black", linewidth=1)
+            label = owner.name if owner else "Unalloc"
+            ax.text(0.5, slot.slot_id, label, ha="center", va="center", fontsize=10)
+        ax.set_yticks([s.slot_id for s in market.slots])
+        ax.set_yticklabels([s.time_label for s in market.slots])
+        ax.set_xlabel("Allocation", fontsize=12)
+        ax.set_ylabel("Time Slot", fontsize=12)
+        ax.set_title(title, fontsize=14)
+        patches = [mpatches.Patch(color=agent_colors[a.agent_id], label=a.name) for a in market.agents]
+        patches.append(mpatches.Patch(color=agent_colors[None], label="Unallocated"))
+        ax.legend(handles=patches, loc="upper left", bbox_to_anchor=(1.02, 1))
+        ax.set_xlim(0, 1)
+        ax.set_xticks([])
     plt.tight_layout()
-    
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
-    
     return fig
 
 
@@ -146,34 +177,60 @@ def plot_allocation_and_prices(
         matplotlib Figure
     """
     market = result.market
-    fig, ax = plt.subplots(figsize=(12, 6))
-
     colors = plt.cm.Set3(np.linspace(0, 1, len(market.agents) + 1))
     agent_colors = {agent.agent_id: colors[i] for i, agent in enumerate(market.agents)}
     agent_colors[None] = colors[-1]
 
-    for slot in market.slots:
-        owner = market.get_slot_owner(slot)
-        owner_id = owner.agent_id if owner else None
-        color = agent_colors[owner_id]
-        price = market.bid_prices.get(slot.slot_id, slot.reserve_price)
-        ax.barh(slot.slot_id, 1, left=0, height=0.8,
-                color=color, edgecolor="black", linewidth=1)
-        label = (owner.name if owner else "Unalloc") + f"  ${price:.2f}"
-        ax.text(0.5, slot.slot_id, label, ha="center", va="center", fontsize=10)
-
-    ax.set_yticks([s.slot_id for s in market.slots])
-    ax.set_yticklabels([s.time_label for s in market.slots])
-    ax.set_ylabel("Time Slot", fontsize=12)
-    ax.set_xlabel("CPU", fontsize=12)
-    ax.set_title(title, fontsize=14)
-    ax.set_xlim(0, 1)
-    ax.set_xticks([])
-    patches = [mpatches.Patch(color=agent_colors[a.agent_id], label=a.name)
-               for a in market.agents]
-    patches.append(mpatches.Patch(color=agent_colors[None], label="Unallocated"))
-    ax.legend(handles=patches, loc="upper left", bbox_to_anchor=(1.02, 1))
-
+    if _is_multi_cpu(market):
+        by_cpu = _slots_by_cpu(market)
+        cpus = sorted(by_cpu.keys())
+        n_cpus = len(cpus)
+        n_times = max(len(by_cpu[c]) for c in cpus) if cpus else 0
+        fig, axes = plt.subplots(1, n_cpus, figsize=(5 * n_cpus, max(5, n_times * 0.6)), sharey=True)
+        if n_cpus == 1:
+            axes = [axes]
+        for idx, cpu in enumerate(cpus):
+            ax = axes[idx]
+            slots = by_cpu[cpu]
+            for slot in slots:
+                owner = market.get_slot_owner(slot)
+                owner_id = owner.agent_id if owner else None
+                color = agent_colors[owner_id]
+                price = market.bid_prices.get(slot.slot_id, slot.reserve_price)
+                y = slot.get_time_index()
+                ax.barh(y, 1, left=0, height=0.8, color=color, edgecolor="black", linewidth=1)
+                label = (owner.name if owner else "Unalloc") + f"  ${price:.2f}"
+                ax.text(0.5, y, label, ha="center", va="center", fontsize=10)
+            ax.set_yticks([s.get_time_index() for s in slots])
+            ax.set_yticklabels([s.time_label for s in slots])
+            ax.set_ylabel("Time" if idx == 0 else "")
+            ax.set_xlim(0, 1)
+            ax.set_xticks([])
+            ax.set_title(f"CPU {cpu}", fontsize=12)
+        fig.suptitle(title, fontsize=14)
+        patches = [mpatches.Patch(color=agent_colors[a.agent_id], label=a.name) for a in market.agents]
+        patches.append(mpatches.Patch(color=agent_colors[None], label="Unallocated"))
+        axes[-1].legend(handles=patches, loc="upper left", bbox_to_anchor=(1.02, 1))
+    else:
+        fig, ax = plt.subplots(figsize=(12, max(6, len(market.slots) * 0.35)))
+        for slot in market.slots:
+            owner = market.get_slot_owner(slot)
+            owner_id = owner.agent_id if owner else None
+            color = agent_colors[owner_id]
+            price = market.bid_prices.get(slot.slot_id, slot.reserve_price)
+            ax.barh(slot.slot_id, 1, left=0, height=0.8, color=color, edgecolor="black", linewidth=1)
+            label = (owner.name if owner else "Unalloc") + f"  ${price:.2f}"
+            ax.text(0.5, slot.slot_id, label, ha="center", va="center", fontsize=10)
+        ax.set_yticks([s.slot_id for s in market.slots])
+        ax.set_yticklabels([s.time_label for s in market.slots])
+        ax.set_ylabel("Time Slot", fontsize=12)
+        ax.set_xlabel("CPU", fontsize=12)
+        ax.set_title(title, fontsize=14)
+        ax.set_xlim(0, 1)
+        ax.set_xticks([])
+        patches = [mpatches.Patch(color=agent_colors[a.agent_id], label=a.name) for a in market.agents]
+        patches.append(mpatches.Patch(color=agent_colors[None], label="Unallocated"))
+        ax.legend(handles=patches, loc="upper left", bbox_to_anchor=(1.02, 1))
     plt.tight_layout()
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -301,21 +358,22 @@ def plot_convergence_trace(
             for slot_id in slot_ids:
                 alloc_matrix[r_idx, slot_id] = agent_id
     
-    im = ax1.imshow(alloc_matrix.T, aspect="auto", cmap="tab10", 
+    im = ax1.imshow(alloc_matrix.T, aspect="auto", cmap="tab10",
                     vmin=0, vmax=num_agents + 1)
-    ax1.set_ylabel("Slot ID", fontsize=11)
+    ax1.set_ylabel("Slot", fontsize=11)
     ax1.set_title("Allocation Over Rounds", fontsize=12)
-    
-    # Add colorbar
+    slots = result.market.slots
+    if num_slots <= 16:
+        ax1.set_yticks(range(num_slots))
+        ax1.set_yticklabels([_slot_ylabel(slots[i]) for i in range(num_slots)], fontsize=8)
     cbar = plt.colorbar(im, ax=ax1)
     cbar.set_label("Agent ID (0 = unallocated)")
-    
-    # Bottom: Prices over time
+
     ax2 = axes[1]
     for i in range(num_slots):
         prices = [r.bid_prices[i] for r in rounds_to_show]
-        ax2.plot(range(len(rounds_to_show)), prices, 
-                 label=f"Slot {i}", linewidth=1.5)
+        ax2.plot(range(len(rounds_to_show)), prices,
+                 label=_slot_ylabel(slots[i]) if i < len(slots) else f"Slot {i}", linewidth=1.5)
     
     ax2.set_xlabel("Round", fontsize=11)
     ax2.set_ylabel("Bid Price ($)", fontsize=11)
