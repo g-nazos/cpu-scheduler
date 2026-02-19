@@ -10,6 +10,7 @@ Usage:
     python main.py --example 1         # Run book example 1 (8-slot)
     python main.py --example 2         # Run book example 2 (no equilibrium)
     python main.py --example 3         # Run book example 3 (suboptimal)
+    python main.py --example 4         # Run many-jobs example (8 jobs)
     python main.py --sensitivity       # Run epsilon sensitivity analysis
     python main.py --all               # Run all experiments with visualizations
 """
@@ -27,8 +28,11 @@ from src.auction.ascending import AscendingAuction, AuctionResult
 from src.auction.equilibrium import check_equilibrium, print_equilibrium_report
 from src.experiments.scenarios import (
     create_book_example_1,
+    create_book_example_1_two_cpus,
     create_book_example_2,
     create_book_example_3,
+    create_many_jobs_example,
+    create_duplicate_example_1,
 )
 from src.experiments.metrics import (
     compute_metrics,
@@ -67,19 +71,21 @@ def print_final_market_state(result) -> None:
         print(f"    Slot {slot.slot_id} ({slot.time_label}): ${price:.2f}")
 
 
-def run_book_example_1(epsilon: float = 0.25, show_trace: bool = True) -> None:
+def run_book_example_1(epsilon: float = 0.25, show_trace: bool = True, two_cpus: bool = False) -> None:
     """
     Run the main 8-slot processor example from Section 2.3.3.
     
     Expected behavior:
     - With ε=0.25: Converges to equilibrium in ~24 rounds
     - With ε=1.00: Does NOT reach equilibrium
+    - With two_cpus=True: same jobs, 2 identical CPUs (16 slots).
     """
     print("\n" + "=" * 70)
     
-    market = create_book_example_1()
+    market = create_book_example_1_two_cpus() if two_cpus else create_book_example_1()
     print(f"\nInitial Market Configuration:")
-    print(f"  Slots: {len(market.slots)} (9am-5pm), Reserve: $3.00/hour")
+    slots_desc = f"{len(market.slots)} (2 CPUs × 8 times, 9am-5pm)" if two_cpus else f"{len(market.slots)} (9am-5pm)"
+    print(f"  Slots: {slots_desc}, Reserve: $3.00/hour")
     print(f"  Agents:")
     for agent in market.agents:
         print(f"    {agent.name}: λ={agent.required_slots}, d=slot_{agent.deadline_slot_id}, w=${agent.worth:.2f}")
@@ -100,6 +106,54 @@ def run_book_example_1(epsilon: float = 0.25, show_trace: bool = True) -> None:
     metrics = compute_metrics(result, epsilon)
     print_metrics_report(metrics)
     
+    return result, metrics
+
+
+def run_many_jobs_example(epsilon: float = 0.25, show_trace: bool = True, two_cpus: bool = False) -> None:
+    """Run the many-jobs scenario (8 jobs, 8 slots or 16 with 2 CPUs)."""
+    print("\n" + "=" * 70)
+    market = create_many_jobs_example(num_cpus=2 if two_cpus else 1)
+    slots_desc = f"{len(market.slots)} (2 CPUs × 8 times)" if two_cpus else f"{len(market.slots)} (9am-5pm)"
+    print("\nMany-Jobs Example:")
+    print(f"  Slots: {slots_desc}, Reserve: $3.00/hour")
+    print(f"  Agents: {len(market.agents)} jobs")
+    for agent in market.agents:
+        print(f"    {agent.name}: {agent.required_slots}h, deadline slot_{agent.deadline_slot_id}, w=${agent.worth:.2f}")
+    print(f"\nRunning Ascending Auction with eps=${epsilon:.2f}...")
+    auction = AscendingAuction(epsilon=epsilon)
+    result = auction.run(market)
+    if show_trace:
+        result.print_trace(max_rounds=150)
+    eq_result = check_equilibrium(result.market)
+    print_equilibrium_report(eq_result, result.market)
+    print("\nFinal market state:")
+    print_final_market_state(result)
+    metrics = compute_metrics(result, epsilon)
+    print_metrics_report(metrics)
+    return result, metrics
+
+
+def run_duplicate_example_1(epsilon: float = 0.25, show_trace: bool = True, two_cpus: bool = False) -> None:
+    """Run duplicate of book example 1 (8 jobs: Job1–Job4 each duplicated as Job5–Job8)."""
+    print("\n" + "=" * 70)
+    market = create_duplicate_example_1(num_cpus=2 if two_cpus else 1)
+    slots_desc = f"{len(market.slots)} (2 CPUs x 8 times)" if two_cpus else f"{len(market.slots)} (9am-5pm)"
+    print("\nDuplicate Example 1 (same job types as book example 1, each doubled):")
+    print(f"  Slots: {slots_desc}, Reserve: $3.00/hour")
+    print(f"  Agents: {len(market.agents)} jobs (Job1=Job5, Job2=Job6, Job3=Job7, Job4=Job8)")
+    for agent in market.agents:
+        print(f"    {agent.name}: {agent.required_slots}h, deadline slot_{agent.deadline_slot_id}, w=${agent.worth:.2f}")
+    print(f"\nRunning Ascending Auction with eps=${epsilon:.2f}...")
+    auction = AscendingAuction(epsilon=epsilon)
+    result = auction.run(market)
+    if show_trace:
+        result.print_trace(max_rounds=150)
+    eq_result = check_equilibrium(result.market)
+    print_equilibrium_report(eq_result, result.market)
+    print("\nFinal market state:")
+    print_final_market_state(result)
+    metrics = compute_metrics(result, epsilon)
+    print_metrics_report(metrics)
     return result, metrics
 
 
@@ -262,13 +316,18 @@ Examples:
   python main.py                     Run all book examples
   python main.py --example 1         Run 8-slot processor example
   python main.py --example 1 --eps 1.0   Run example 1 with epsilon=1.0
+  python main.py --example 1 --two-cpus  Run example 1 with 2 identical CPUs
+  python main.py --example 4            Run many-jobs example (8 jobs)
+  python main.py --example 4 --two-cpus Run many jobs with 2 CPUs
+  python main.py --example 5            Run duplicate of example 1 (8 identical job types)
+  python main.py --example 5 --two-cpus Duplicate ex1 with 2 CPUs
   python main.py --sensitivity       Run epsilon sensitivity analysis
   python main.py --all --save        Run all experiments and save plots
         """
     )
     
-    parser.add_argument("--example", "-e", type=int, choices=[1, 2, 3],
-                       help="Run specific book example (1, 2, or 3)")
+    parser.add_argument("--example", "-e", type=int, choices=[1, 2, 3, 4, 5],
+                       help="Run specific example (1-3: book, 4: many jobs, 5: duplicate ex1)")
     parser.add_argument("--eps", type=float, default=0.25,
                        help="Epsilon value for auction (default: 0.25)")
     parser.add_argument("--sensitivity", "-s", action="store_true",
@@ -279,6 +338,8 @@ Examples:
                        help="Save plots to output directory")
     parser.add_argument("--no-plots", action="store_true",
                        help="Disable plot display")
+    parser.add_argument("--two-cpus", action="store_true",
+                       help="Use 2 identical CPUs (examples 1, 4, 5)")
     
     args = parser.parse_args()
     
@@ -290,12 +351,13 @@ Examples:
         if args.all:
             run_all_experiments(save_plots=args.save)
         elif args.example == 1:
-            result1, _ = run_book_example_1(epsilon=args.eps)
+            result1, _ = run_book_example_1(epsilon=args.eps, two_cpus=args.two_cpus)
             if args.save:
                 output_dir = Path("output")
                 output_dir.mkdir(exist_ok=True)
+                suffix = "_2cpus" if args.two_cpus else ""
                 plot_allocation_and_prices(result1, title=f"Allocation and Prices - Example 1 (ε={args.eps})",
-                                          save_path=str(output_dir / f"ex1_allocation_eps{args.eps}.png"))
+                                          save_path=str(output_dir / f"ex1_allocation_eps{args.eps}{suffix}.png"))
             if not args.no_plots:
                 plt.show()
         elif args.example == 2:
@@ -314,6 +376,26 @@ Examples:
                 plot_allocation_and_prices(result3, title="Allocation and Prices - Example 3",
                                           save_path=str(output_dir / "ex3_allocation.png"))
                 print(f"\nPlot saved to {output_dir / 'ex3_allocation.png'}")
+        elif args.example == 4:
+            result4, _ = run_many_jobs_example(epsilon=args.eps, two_cpus=args.two_cpus)
+            if args.save:
+                output_dir = Path("output")
+                output_dir.mkdir(exist_ok=True)
+                suffix = "_2cpus" if args.two_cpus else ""
+                plot_allocation_and_prices(result4, title=f"Many Jobs (ε={args.eps}){suffix}",
+                                          save_path=str(output_dir / f"ex4_many_jobs{suffix}.png"))
+            if not args.no_plots:
+                plt.show()
+        elif args.example == 5:
+            result5, _ = run_duplicate_example_1(epsilon=args.eps, two_cpus=args.two_cpus)
+            if args.save:
+                output_dir = Path("output")
+                output_dir.mkdir(exist_ok=True)
+                suffix = "_2cpus" if args.two_cpus else ""
+                plot_allocation_and_prices(result5, title=f"Duplicate Ex1 (ε={args.eps}){suffix}",
+                                          save_path=str(output_dir / f"ex5_duplicate_ex1{suffix}.png"))
+            if not args.no_plots:
+                plt.show()
         elif args.sensitivity:
             run_epsilon_sensitivity_analysis(show_plots=not args.no_plots)
     except KeyboardInterrupt:
