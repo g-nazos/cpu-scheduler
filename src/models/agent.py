@@ -1,10 +1,3 @@
-"""
-Agent (job) representation for the scheduling problem.
-
-Based on Definition 2.3.10 from Section 2.3.3 of "Multiagent Systems"
-by Shoham & Leyton-Brown.
-"""
-
 from dataclasses import dataclass
 from typing import FrozenSet, Set
 
@@ -22,8 +15,9 @@ class Agent:
     - A worth w_i: the value if the job completes on time
     
     The valuation function v_i(F_i) is defined as:
-        v_i(F_i) = w_i  if F_i includes λ_i slots before d_i
+        v_i(F_i) = w_i  if F_i includes λ_i consecutive slots before d_i
                  = 0    otherwise
+    (Jobs require a contiguous block of time slots.)
     
     Attributes:
         agent_id: Unique identifier for the agent
@@ -50,11 +44,32 @@ class Agent:
         return (f"Agent({self.agent_id}, '{self.name}', "
                 f"d={self.deadline_slot_id}, λ={self.required_slots}, w={self.worth})")
     
+    def _has_consecutive_run(
+        self, allocated_slots: Set[Slot] | FrozenSet[Slot], length: int
+    ) -> bool:
+        """True iff allocated_slots contains a consecutive block of length slots before deadline on one CPU."""
+        # Group by CPU (multi-CPU) or treat all as one (single-CPU)
+        by_cpu: dict[int, list[int]] = {}
+        for s in allocated_slots:
+            t = s.get_time_index()
+            if t >= self.deadline_slot_id:
+                continue
+            c = s.cpu_id
+            by_cpu.setdefault(c, []).append(t)
+        for times in by_cpu.values():
+            if len(times) < length:
+                continue
+            times = sorted(set(times))
+            for i in range(len(times) - length + 1):
+                if times[i + length - 1] - times[i] == length - 1:
+                    return True
+        return False
+
     def valuation(self, allocated_slots: Set[Slot] | FrozenSet[Slot]) -> float:
         """
         Compute the valuation v_i(F_i) for a given bundle of slots.
         
-        v_i(F_i) = w_i  if F_i includes λ_i slots before deadline d_i
+        v_i(F_i) = w_i  if F_i includes λ_i consecutive slots before deadline d_i
                  = 0    otherwise
         
         Args:
@@ -65,14 +80,7 @@ class Agent:
         """
         if not allocated_slots:
             return 0.0
-        
-        # Count slots that are before the deadline
-        slots_before_deadline = sum(
-            1 for slot in allocated_slots
-            if slot.slot_id < self.deadline_slot_id
-        )
-        
-        if slots_before_deadline >= self.required_slots:
+        if self._has_consecutive_run(allocated_slots, self.required_slots):
             return self.worth
         return 0.0
     
@@ -99,7 +107,7 @@ class Agent:
     
     def get_valid_slots(self, all_slots: list[Slot]) -> list[Slot]:
         """
-        Get all slots that are before this agent's deadline.
+        Get all slots that are before this agent's deadline (by time index; works for single- and multi-CPU).
         
         Args:
             all_slots: List of all available slots
@@ -107,7 +115,7 @@ class Agent:
         Returns:
             List of slots that are before the deadline
         """
-        return [slot for slot in all_slots if slot.slot_id < self.deadline_slot_id]
+        return [slot for slot in all_slots if slot.get_time_index() < self.deadline_slot_id]
     
     def find_best_bundle(
         self,
@@ -121,8 +129,9 @@ class Agent:
         This implements the argmax in the ascending auction:
         S* = argmax_{S⊆X, S⊇F_i} (v_i(S) - Σ_{j∈S} p_j)
         
-        For the scheduling problem, we need to find the cheapest
-        set of required_slots slots before the deadline, or the empty set.
+        For the scheduling problem, we only consider consecutive slot bundles
+        (contiguous blocks). We find the consecutive window of required_slots
+        slots before the deadline that maximizes surplus, or the empty set.
         
         Args:
             all_slots: List of all available slots
@@ -133,20 +142,30 @@ class Agent:
             Tuple of (best_bundle, best_surplus)
         """
         valid_slots = self.get_valid_slots(all_slots)
-        
-        # If not enough slots available before deadline, return empty
-        if len(valid_slots) < self.required_slots:
-            return frozenset(), 0.0
-        
-        # Sort valid slots by price (ascending)
-        sorted_slots = sorted(valid_slots, key=lambda s: prices.get(s.slot_id, 0.0))
-        
-        # The best bundle is the cheapest required_slots slots
-        best_bundle = frozenset(sorted_slots[:self.required_slots])
-        best_surplus = self.surplus(best_bundle, prices)
-        
-        # Compare with empty bundle (surplus = 0)
+        # Group by CPU so we only consider consecutive time windows on a single CPU
+        by_cpu: dict[int, list[Slot]] = {}
+        for s in valid_slots:
+            by_cpu.setdefault(s.cpu_id, []).append(s)
+        for c in by_cpu:
+            by_cpu[c] = sorted(by_cpu[c], key=lambda s: s.get_time_index())
+
+        best_bundle: FrozenSet[Slot] = frozenset()
+        best_surplus = 0.0
+
+        for _cpu, group in by_cpu.items():
+            if len(group) < self.required_slots:
+                continue
+            for i in range(len(group) - self.required_slots + 1):
+                window = group[i : i + self.required_slots]
+                times = [s.get_time_index() for s in window]
+                if times[-1] - times[0] != self.required_slots - 1:
+                    continue
+                bundle = frozenset(window)
+                surplus = self.surplus(bundle, prices)
+                if surplus > best_surplus:
+                    best_surplus = surplus
+                    best_bundle = bundle
+
         if best_surplus < 0:
             return frozenset(), 0.0
-        
         return best_bundle, best_surplus
